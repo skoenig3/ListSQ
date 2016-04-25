@@ -5,6 +5,10 @@ function [itmlist,sequence_items,sequence_locations] = read_ListSQ_itm_and_cnd_f
 % organized. Further function determines the number of sequences and which
 % items (the largets item #) are assoicated with which sequence.
 
+%remove any preceding or trailing spaces
+itmfile = strtrim(itmfile);
+cndfile = strtrim(cndfile);
+
 if nargin == 1
     ITMFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' itmfile];
     CNDFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' itmfile(1:end-4) '.cnd'];
