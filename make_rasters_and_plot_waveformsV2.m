@@ -184,7 +184,7 @@ switch task
             
             if spike_count < minimum_spikes %too few spikes
                 listsqplot(allspikes,type,allspikesITI,allspikespertrial,spikespertrial,...
-                    ITIspikespertrial,allsaccadespikes,trialbinsize,binsize,trial_averaged_amplitudtrial_num)
+                    ITIspikespertrial,allsaccadespikes,trialbinsize,binsize,trial_averaged_amplitude,trial_num)
                 subtitle(title_str);
                 save_and_close_fig(too_few_folder,[task_file(1:end-11) '_' unit_stats{1,unit} '_raster']);
                 
@@ -208,9 +208,14 @@ switch task
             subtitle(title_str);
             
             %do manual check of which trials to take. Humans are just
-            %really good at seeing pattens....    
-            reply = input(['You can keep all trials (max trial #' num2str(num_trials) '). Is this Ok? [Y/#s]: \n' ...
-                'If NO please state [trial start and trial end].']);
+            %really good at seeing pattens....
+            try
+                reply = input(['You can keep all trials (max trial #' num2str(num_trials) '). Is this Ok? [Y/#s]: \n' ...
+                    'If NO please state [trial start and trial end].']);
+            catch
+                reply = input(['You can keep all trials (max trial #' num2str(num_trials) '). Is this Ok? [Y/#s]: \n' ...
+                    'If NO please state [trial start and trial end].']);
+            end
             if isnumeric(reply)
                 [start_end] = listsqTrialCutoffplots(reply,allspikes,type,allspikesITI,allspikespertrial,...
                     spikespertrial,ITIspikespertrial,allsaccadespikes,trialbinsize,binsize,trial_averaged_amplitude,trial_num);
@@ -357,8 +362,10 @@ end
 %not obvious
 subplot(3,3,8)
 [trial,time] = find(allsaccadespikes == 1);
-plot(time-500,sub_trial_num(trial),'.k')
-ylim([0 max(sub_trial_num(trial))+5])
+if ~isempty(trial)
+    plot(time-500,sub_trial_num(trial),'.k')
+    ylim([0 max(sub_trial_num(trial))+5])
+end
 ylabel('Trial #')
 xlabel('Time from Saccade Start (ms)')
 
@@ -382,8 +389,10 @@ end
 %Just raster from ITI start
 subplot(3,3,7)
 [trial,time] = find(allspikesITI == 1);
-plot(time,trial_num(trial),'.k')
-ylim([0 max(trial_num(trial))+5])
+if ~isempty(trial)
+    plot(time,trial_num(trial),'.k')
+    ylim([0 max(trial_num(trial))+5])
+end
 ylabel('Trial #')
 xlabel('Time from ITI start (ms)')
 
@@ -393,7 +402,9 @@ subplot(3,3,9)
 hold on
 b = bar([spikespertrial ITIspikespertrial],'stacked');
 set(b,'edgecolor','none','FaceAlpha',0.5)
-xlim([floor(min(trial)/6)-1 ceil(max(trial)/6)+1]);
+if ~isempty(trial)
+    xlim([floor(min(trial)/6)-1 ceil(max(trial)/6)+1]);
+end
 xl = xlim;
 plot([xl(1) xl(2)],[nanmedian(allspikespertrial) nanmedian(allspikespertrial)],'k-','linewidth',5)
 plot([xl(1) xl(2)],[nanmedian(allspikespertrial)-nanstd(allspikespertrial) nanmedian(allspikespertrial)-nanstd(allspikespertrial)],'k--')
@@ -524,8 +535,13 @@ while isnumeric(reply)
         end
     end
     
-    reply = input(['You can keep these trials. Is this Ok? [Y/#s]: \n' ...
-        'If NO please state [trial start and trial end].']);
+    try
+        reply = input(['You can keep these trials. Is this Ok? [Y/#s]: \n' ...
+            'If NO please state [trial start and trial end].']);
+    catch
+        reply = input(['You can keep these trials. Is this Ok? [Y/#s]: \n' ...
+            'If NO please state [trial start and trial end].']);
+    end
     
 end
 end

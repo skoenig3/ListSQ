@@ -30,7 +30,7 @@ load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
 %     task = 'ListSQ';
 %     make_rasters_and_plot_waveformsV2(data_dir,figure_dir,session_data{sess},task)
 % end
-% 
+
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % %%---Autmoatically analyze for event locked cells for ListSQ---%%%
 % for sess = length(session_data)
@@ -62,9 +62,9 @@ load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Autmoatically analyze ListSQ for Spatially Modulated Cells---%%%
-for sess = 1:length(session_data)
-    spatial_analysisV2(data_dir,figure_dir,session_data{sess},'ListSQ')
-end
+% for sess = 1:length(session_data)
+%     spatial_analysisV2(data_dir,figure_dir,session_data{sess},'ListSQ')
+% end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Autmoatically analyze ListSQ for Saccade Direction Cells---%%%
