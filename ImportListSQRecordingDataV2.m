@@ -18,7 +18,7 @@ figure_dir = [figure_dir '\Calibration\'];
 %grab important file information from session_data
 task = 'ListSQ';
 cch25_file = session_data.calibration_file;%cch25f.sav
- [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,waveform_count]...
+[task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,waveform_count]...
     = get_task_data(session_data,task);
 if isempty(task_file)
     warning('No ListSQ file could be found. Exiting function...')
@@ -86,17 +86,17 @@ for wv = 1:length(valid_units)
     unit = strfind(unit_names,dataWF.neurons{valid_units(wv)}.name);
     unit = find(~cellfun(@isempty,unit));
     if length(waveforms{2,wv}) ~= waveform_count(unit)
-       disp(['Warning number of waveforms imported differnet than expected: ' ...
-           'Imported ' num2str(length(waveforms{2,wv})) ' but expected ' num2str(waveform_count(wv))]);
+        disp(['Warning number of waveforms imported differnet than expected: ' ...
+            'Imported ' num2str(length(waveforms{2,wv})) ' but expected ' num2str(waveform_count(wv))]);
     end
 end
 
 %when files are cut then merged they can have gaps in the data so want to
 %remove these gaps. They appear to be due to time stamp start/ends that
-%didn't get fixed properly by plexUtil. SDK 1/10/16. 
+%didn't get fixed properly by plexUtil. SDK 1/10/16.
 % Gaps can only be in continuous data since they're replaced with NaNs
 % while spike channels are just buffed with 0's
-%noticed 
+%noticed
 lfp_channels = find_desired_channels(cfg,'LFP');
 gaps = cell(1,13);
 for channel = lfp_channels(1):length(data)
@@ -114,10 +114,10 @@ if any(~gapsQ) %then there is a gap in the data somewhere
     warning('Gaps have been found in the data')
     reply = input('Do you wish to continue Y/N [Y]:','s');
     if strfind(lower(reply),'y')
-        %first check that all the gaps are only on the continuous channels 
+        %first check that all the gaps are only on the continuous channels
         gap_channels = find(~gapsQ);
         if any(gap_channels < min(lfp_channels))
-          error('Something is not right with the gaps in the data')
+            error('Something is not right with the gaps in the data')
         end
         
         %second check that all the gaps are only on the continuous channels
@@ -131,8 +131,8 @@ if any(~gapsQ) %then there is a gap in the data somewhere
         end
         
         if all(all(same_gaps)) %then all the gaps are the same which is good
-            %then lets fix these trials            
-            gap_trials = gaps{gap_channels(1)}(1,:);            
+            %then lets fix these trials
+            gap_trials = gaps{gap_channels(1)}(1,:);
             for trial = 1:length(gap_trials)
                 nan_ind = find(isnan(data(gap_channels(1)).values{gap_trials(trial)}));
                 disp(['Fixing gaps in trial # ' num2str(gap_trials(trial)) '. Fixing ' num2str(length(nan_ind)) ' gaps!'])
@@ -148,18 +148,31 @@ if any(~gapsQ) %then there is a gap in the data somewhere
                 tim = cfg.trl(gap_trials(trial)).alltim;
                 after = find(tim-cfg.trl(gap_trials(trial)).begsmpind > nan_ind(1));
                 tim(after) = tim(after) - length(nan_ind);
-                cfg.trl(gap_trials(trial)).alltim = tim; 
+                cfg.trl(gap_trials(trial)).alltim = tim;
             end
         else
-             error('Something is not right with the gaps in the data')
+            error('Something is not right with the gaps in the data')
         end
-
+        
         disp('Gaps in data is now fixed')
     else
         error('Gaps not fixed session will now abort')
     end
 end
 
+if length(cfg.trl) > length(data(1).values)
+    disp('Warning: there is less data trials than trials defined by strobes')
+    reply = input('Do you wish to remove cfg.trl trials Y/N [Y]:','s');
+    if strfind(lower(reply),'y')
+        num_trials = length(data(1).values);
+        cfg.trl = cfg.trl(1:num_trials);
+    else
+        error('Data structure and cfg structure do not match in length')
+    end
+    
+elseif length(data(1).values) > length(cfg.trl)
+    error('There are more data trials than trials defined by strobes')
+end
 
 disp('Data imported Successfully')
 
@@ -177,7 +190,7 @@ for t = 1:length(data(eyechans(1)).values);
     x = data(eyechans(1)).values{t}; %second to last index in structure array is horizontal eye data;
     y = data(eyechans(2)).values{t}; %last index in structure array is vertical eye data;
     outside_xy{t} = NaN(2,length(x));
-
+    
     [x,y] = tformfwd(tform,x,y); %calibrate: transform votlages into "dva", 24 pixels/dva
     
     x = 24*x; %convert from cortex dva to pixels
@@ -190,7 +203,7 @@ for t = 1:length(data(eyechans(1)).values);
     outside_xy{t}(2,x < 1) = y(x < 1);
     outside_xy{t}(1,x > imageX) = x(x > imageX);
     outside_xy{t}(2,x > imageX) = y(x > imageX);
-  
+    
     y(x < 1) = NaN;
     x(x < 1) = NaN;
     y(x > imageX) = NaN;
