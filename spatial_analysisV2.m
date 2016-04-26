@@ -226,6 +226,22 @@ switch task
                 yn = round(data(eyechans(2)).values{t}(imgon:imgoff));
                 
                 img_index = find(img_cnd == cfg.trl(t).cnd);
+                
+                if length(img_index) > 1
+                    emailme(['Spatial Analysis Importing Data found 2 image presentations. Img condition ' num2str(img_cnd(img_index(1)))...
+                        ' ' task_file])
+                    %remove that image from analysis. For TO set 17 seems
+                    %to be a cortex error...
+                    imgnum = which_img(img_index(1));
+                    img_index = find(which_img == imgnum);
+                    which_img(img_index) = NaN;
+                    img_cnd(img_index) = NaN;
+                    novel_vs_repeat(img_index) = NaN;
+                    img_index = find(img_cnd == cfg.trl(t).cnd);
+                end
+                if isempty(img_index)
+                   continue 
+                end
                 for unit = 1:num_units
                     if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only valid trials for this unit
                         eyepos{unit}(2*t-1,1:length(xn)) = xn;
@@ -276,6 +292,13 @@ switch task
                 elseif condition == 3 %all images
                     trial_data{1} = eyepos{unit};
                     trial_data{2} = spike_times{unit};
+                end 
+                if nansum(nansum(trial_data{2})) == 0 %this occassiionally happens with really specifc/low firing rate neurons...
+                    %and we don't want a NaN
+                    if size(eyepos{unit},1) >= 32 %at least have data for 1 novel/repeat block
+                        peak_firing_rate(condition,unit) = 0;
+                        continue
+                    end
                 end
                 
                 [filtered_time] = get_smoothed_Time(trial_data{1},imageX,imageY,Fs,binsize,H);
