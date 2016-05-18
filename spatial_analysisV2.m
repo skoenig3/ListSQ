@@ -24,12 +24,14 @@ twin = 500;% here how much after image onset to ignore data
 
 %filtering and estimated mutual information parameters
 binsize = 25; %pixels per bin spatial bin in either dimension ~1/2 dva
-filter_width = 2; %std of 2D guassian filter ~ 2 dva
+filter_width = 3; %std of 2D guassian filter ~ 2 dva
 numshuffs = 500; %recommend this is between 100 & 1000
 fr_threshold = 1; %peak rate must be greater than 1 Hz to process. Don't want to waste
 %processing/shuffling time on "silent neurons"
 filter_size = filter_width*10;
 H = fspecial('gaussian',filter_size,filter_width);
+min_bin_dur = 0.100; %minimum of 100 ms in each bin to use so no outliers
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---import task and unit data---%%%
@@ -51,6 +53,42 @@ num_trials = length(cfg.trl);
 valid_trials(1,isnan(valid_trials(1,:))) = 1;
 valid_trials(2,isnan(valid_trials(2,:))) = num_trials;
 
+%---determine number of blocks unit was stable for
+%remove units with too few trials
+%these are the absolute minimum data required to do data analysis may want
+%to be more strigent later but not worth doing analysis (especially
+%shuffling) on such few trials for these neurons
+if str2double(task_file(3:8)) < 140805 %7 second viewing with fewere sequence trials
+    minimum_trials_1 = 101; %for session start minimum number of trials: includes fam block and 16 novel/repeat images + sequence trials
+    minimum_trials_2 =  80;%for rest of session: includes 16 novel/repeat images + sequence trials
+else
+    minimum_trials_1 = 117; %for session start minimum number of trials: includes fam block and 16 novel/repeat images + sequence trials
+    minimum_trials_2 =  96;%for rest of session: includes 16 novel/repeat images + sequence trials
+end
+
+
+min_blks = 2;
+for unit = 1:num_units
+    start_end = valid_trials(:,unit);
+    if isnan(start_end(1))
+        start_end(1) = 1;
+    end
+    if isnan(start_end(2))
+        start_end(2) = length(cfg.trl);
+    end
+    start_end(start_end == 0) = 1;
+    min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
+    max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
+    
+    if min_trial < 22 %includes fam block
+        min_trial = 22; %remove then count from there
+    end
+    num_blks = floor((max_trial-min_trial+1)/minimum_trials_2);
+    
+    if num_blks < min_blks
+        valid_trials(:,unit) = NaN;
+    end
+end
 switch task
     case {'cvtnew','CVTNEW'}
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -240,7 +278,7 @@ switch task
                     img_index = find(img_cnd == cfg.trl(t).cnd);
                 end
                 if isempty(img_index)
-                   continue 
+                    continue
                 end
                 for unit = 1:num_units
                     if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only valid trials for this unit
@@ -271,7 +309,7 @@ switch task
         spike_times = laundry(spike_times,1);
         which_images = laundry(which_images);
         nvr = laundry(nvr);
-
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Spatial analysis and signifance testing---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -292,7 +330,7 @@ switch task
                 elseif condition == 3 %all images
                     trial_data{1} = eyepos{unit};
                     trial_data{2} = spike_times{unit};
-                end 
+                end
                 if nansum(nansum(trial_data{2})) == 0 %this occassiionally happens with really specifc/low firing rate neurons...
                     %and we don't want a NaN
                     if size(eyepos{unit},1) >= 32 %at least have data for 1 novel/repeat block
@@ -301,15 +339,15 @@ switch task
                     end
                 end
                 
-                [filtered_time] = get_smoothed_Time(trial_data{1},imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time < 0.025) = NaN;
-                [filtered_space] = get_smoothed_Space(trial_data{1},trial_data{2},imageX,imageY,binsize,H);
+                [filtered_time] = filter_time(trial_data{1},imageX,imageY,Fs,binsize,H);
+                filtered_time(filtered_time < min_bin_dur) = NaN;
+                [filtered_space] = filter_space(trial_data{1},trial_data{2},imageX,imageY,binsize,H);
                 
                 fr = filtered_space./filtered_time; %observed firing rate over space
                 peak_firing_rate(condition,unit) = prctile(fr(1:end),99);%don't want to grab outliers
             end
         end
-                
+        
         %will perform spatial analysis on novel images, repeat images, and all images
         spatial_info.rate = NaN(3,num_units); %the observed information rate in bits/sec
         spatial_info.shuffled_info_rate = cell(3,num_units); %bootstrapped information rate in bits/sec expected by chance from spike train
@@ -350,8 +388,8 @@ switch task
                         100*sum(spatial_info.spatialstability(condition,unit) > ...
                         spatial_info.shuffled_spatialstability{condition,unit})/numshuffs;
                 else
-                       spatial_info.shuffled_rate_prctile(condition,unit) = NaN;
-                       spatial_info.shuffled_spatialstability_prctile(condition,unit)=NaN;
+                    spatial_info.shuffled_rate_prctile(condition,unit) = NaN;
+                    spatial_info.shuffled_spatialstability_prctile(condition,unit)=NaN;
                 end
             end
         end
@@ -369,52 +407,52 @@ switch task
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Spatial analysis on Time shifted Data---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%         spike_times_ts = [];
-%         spatial_info_ts = [];
-%         spike_times_ts = cell(length(temporal_shifts),num_units);
-%         for ts = 1:length(temporal_shifts)
-%             for unit = 1:num_units
-%                 spike_times_ts{ts,unit} = circshift_row_non_random(spike_times{unit},temporal_shifts(ts));
-%             end
-%         end
-%         
-%         info_type = 'spatial_noshuff'; %don't need to shuffle the data again already did above
-%         %will perform spatial analysis on novel images, repeat images, and all images
-%         spatial_info_ts.rate = NaN(3,num_units,length(temporal_shifts)); %the observed information rate in bits/sec
-%         spatial_info_ts.shuffled_95_percentile = NaN(3,num_units,length(temporal_shifts));
-%         spatial_info_ts.shuffled_90_percentile = NaN(3,num_units,length(temporal_shifts));
-%         trial_data{3} = [imageX imageY];
-%         
-%         for condition = 1:3
-%             for unit = 1:num_units
-%                 for ts = 1:length(temporal_shifts)
-%                     if condition == 1 %novel images
-%                         trial_data{1} = select_eyepos(eyepos{unit},nvr{unit} == 1);
-%                         trial_data{2} = spike_times_ts{ts,unit}(nvr{unit} == 1,:);
-%                     elseif condition == 2 %repeat images
-%                         trial_data{1} = select_eyepos(eyepos{unit},nvr{unit} == 2);
-%                         trial_data{2} = spike_times_ts{ts,unit}(nvr{unit} == 2,:);
-%                     elseif condition == 3 %all images
-%                         trial_data{1} = eyepos{unit};
-%                         trial_data{2} = spike_times_ts{ts,unit};
-%                     end
-%                     [spatial_info_ts.rate(condition,unit,ts),~]...
-%                         = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
-%                 end
-%                 spatial_info_ts.shuffled_95_percentile(condition,unit) = spatial_info.shuffled_95_percentile(condition,unit); %grab the 95% from above
-%                 spatial_info_ts.shuffled_90_percentile(condition,unit) = spatial_info.shuffled_90_percentile(condition,unit); %grab the 90% from above
-%             end
-%         end
-%         
-%         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%         %%%---Plot and Save Figures of Time Shifted Results---%%%
-%         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%         task_type = 'List_spatial_time_shifted';
-%         unit_names.multiunit = multiunit;
-%         unit_names.name = unit_stats(1,:);
-%         spatial_info_ts.temporal_shifts = temporal_shifts;
-%         spatial_analysis_plotsV2(figure_dir,task_file,eyepos,spike_times_ts,spatial_info_ts,task_type,...
-%             unit_names,[binsize,filter_width],imageX,imageY,nvr,Fs);
+        %         spike_times_ts = [];
+        %         spatial_info_ts = [];
+        %         spike_times_ts = cell(length(temporal_shifts),num_units);
+        %         for ts = 1:length(temporal_shifts)
+        %             for unit = 1:num_units
+        %                 spike_times_ts{ts,unit} = circshift_row_non_random(spike_times{unit},temporal_shifts(ts));
+        %             end
+        %         end
+        %
+        %         info_type = 'spatial_noshuff'; %don't need to shuffle the data again already did above
+        %         %will perform spatial analysis on novel images, repeat images, and all images
+        %         spatial_info_ts.rate = NaN(3,num_units,length(temporal_shifts)); %the observed information rate in bits/sec
+        %         spatial_info_ts.shuffled_95_percentile = NaN(3,num_units,length(temporal_shifts));
+        %         spatial_info_ts.shuffled_90_percentile = NaN(3,num_units,length(temporal_shifts));
+        %         trial_data{3} = [imageX imageY];
+        %
+        %         for condition = 1:3
+        %             for unit = 1:num_units
+        %                 for ts = 1:length(temporal_shifts)
+        %                     if condition == 1 %novel images
+        %                         trial_data{1} = select_eyepos(eyepos{unit},nvr{unit} == 1);
+        %                         trial_data{2} = spike_times_ts{ts,unit}(nvr{unit} == 1,:);
+        %                     elseif condition == 2 %repeat images
+        %                         trial_data{1} = select_eyepos(eyepos{unit},nvr{unit} == 2);
+        %                         trial_data{2} = spike_times_ts{ts,unit}(nvr{unit} == 2,:);
+        %                     elseif condition == 3 %all images
+        %                         trial_data{1} = eyepos{unit};
+        %                         trial_data{2} = spike_times_ts{ts,unit};
+        %                     end
+        %                     [spatial_info_ts.rate(condition,unit,ts),~]...
+        %                         = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
+        %                 end
+        %                 spatial_info_ts.shuffled_95_percentile(condition,unit) = spatial_info.shuffled_95_percentile(condition,unit); %grab the 95% from above
+        %                 spatial_info_ts.shuffled_90_percentile(condition,unit) = spatial_info.shuffled_90_percentile(condition,unit); %grab the 90% from above
+        %             end
+        %         end
+        %
+        %         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %         %%%---Plot and Save Figures of Time Shifted Results---%%%
+        %         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %         task_type = 'List_spatial_time_shifted';
+        %         unit_names.multiunit = multiunit;
+        %         unit_names.name = unit_stats(1,:);
+        %         spatial_info_ts.temporal_shifts = temporal_shifts;
+        %         spatial_analysis_plotsV2(figure_dir,task_file,eyepos,spike_times_ts,spatial_info_ts,task_type,...
+        %             unit_names,[binsize,filter_width],imageX,imageY,nvr,Fs);
         
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -489,23 +527,4 @@ else %D < 0 so shift left
         end
     end
 end
-end
-
-function [filtered_time] = get_smoothed_Time(eyepos,imageX,imageY,Fs,binsize,H)
-
-%calculate the total time spent at any locaitons in binned pixels
-spatial_time = time_per_pixel(eyepos,imageX,imageY,Fs);
-filtered_time = bin2(spatial_time,binsize,binsize);
-filtered_time = imfilter(filtered_time,H);
-filtered_time(filtered_time < 0.001) = NaN;
-filtered_time = filtered_time(end:-1:1,:); %flip so rightside up
-end
-
-function [filtered_space] = get_smoothed_Space(eyepos,spike_times,imageX,imageY,binsize,H)
-%caluclate total spikes over space
-[firing_location] = pixel_spike_location(eyepos,spike_times,imageX,imageY);
-filtered_space = bin2(firing_location,binsize,binsize);
-filtered_space = imfilter(filtered_space,H);
-filtered_space(filtered_space == 0) = NaN;
-filtered_space = filtered_space(end:-1:1,:); %flip so rightside up
 end

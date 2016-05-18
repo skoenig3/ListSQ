@@ -58,10 +58,10 @@ data = getPlexonTrialData(cfg);
 
 % import waveforms seperately for some reason couldn't get it to work above
 waveforms = cell(1,length(waveform_channels));
-for wv = 1:length(waveform_channels);
-    spikewaves = read_plexon_nex(cfg.dataset , 'channel',waveform_channels(wv));
-    waveforms{wv} = spikewaves.dat;
-end
+% for wv = 1:length(waveform_channels);
+%     spikewaves = read_plexon_nex(cfg.dataset , 'channel',waveform_channels(wv));
+%     waveforms{wv} = spikewaves.dat;
+% end
 
 disp('Data imported Successfully')
 

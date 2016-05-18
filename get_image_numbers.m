@@ -6,8 +6,14 @@ img_count = 1;
 for t = 1:length(cfg.trl);
     if itmlist(cfg.trl(t).cnd-1000) > sequence_items(end)
         if any(cfg.trl(t).allval == img_on_code);
-            which_img(img_count) = itmlist(cfg.trl(t).cnd-1000);
-            img_cnd(img_count) = cfg.trl(t).cnd;
+            if length (cfg.trl(t).cnd) > 1
+                which_img(img_count) = itmlist(cfg.trl(t).cnd(1)-1000);
+                img_cnd(img_count) = cfg.trl(t).cnd(1);
+                warning('More than 1 condition for this trial')
+            else
+                which_img(img_count) = itmlist(cfg.trl(t).cnd-1000);
+                img_cnd(img_count) = cfg.trl(t).cnd;
+            end
             img_count = img_count+1;
         end
     end

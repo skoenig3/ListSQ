@@ -35,6 +35,7 @@ spatial_skaggs = [0 0]; %units > 95% shuffled for skaggs infomration score
 spatial_stability = [0 0];%units > 95% shuffled for Miriam's spatial stability
 spatial_skaggs_stability = [0 0]; %units with > 95% shuffled for skaggs AND spatial stability
 
+count2 = 0;
 
 for sess = 1:length(session_data)
     
@@ -54,7 +55,7 @@ for sess = 1:length(session_data)
     [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
         multiunit,unit_confidence,sorting_quality);
     
-
+    
     %these are the absolute minimum data required to do data analysis may want
     %to be more strigent later but not worth doing analysis (especially
     %shuffling) on such few trials for these neurons
@@ -66,15 +67,15 @@ for sess = 1:length(session_data)
         minimum_trials_2 =  96;%for rest of session: includes 16 novel/repeat images + sequence trials
     end
     
-
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Get General Unit Attributes---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     for unit = 1:num_units
-        if multiunit(unit) %then multiunit 
+        if multiunit(unit) %then multiunit
             su_mu_ind = 2;
         else %single unit
-           su_mu_ind = 1; 
+            su_mu_ind = 1;
         end
         
         total_recorded(su_mu_ind) =   total_recorded(su_mu_ind)+1;
@@ -97,13 +98,13 @@ for sess = 1:length(session_data)
             start_end(start_end == 0) = 1;
             min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
             max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
-  
+            
             if max_trial < minimum_trials_1
                 error('Unit should have been stable for more trials to be processed')
             end
             
             if min_trial < 22 %includes fam block
-               min_trial = 22; %remove then count from there 
+                min_trial = 22; %remove then count from there
             end
             num_blks = floor((max_trial-min_trial+1)/minimum_trials_2);
             
@@ -123,7 +124,7 @@ for sess = 1:length(session_data)
             reason_unused(2,su_mu_ind) = reason_unused(2,su_mu_ind)+1;
         elseif stability_attribute(unit) == 4 %poorly isolated/not confident unit is real
             if unit_stats{2,unit} >= 0.8 && unit_stats{3,unit} >= 3%should have been used but wasn't
-               error('Unit should have been good enought to use')
+                error('Unit should have been good enought to use')
             end
             reason_unused(3,su_mu_ind) = reason_unused(3,su_mu_ind)+1;
         end
@@ -142,10 +143,10 @@ for sess = 1:length(session_data)
     for unit = 1:num_units
         %unstable/usable units
         if stability_attribute(unit) ~=  1 %not used unit
-           if any(~isnan(peak_firing_rate(:,unit)))
-              error('Unit was stable and should have been processed') 
-           end
-           continue %move to the next unit
+            if any(~isnan(peak_firing_rate(:,unit)))
+                error('Unit was stable and should have been processed')
+            end
+            continue %move to the next unit
         end
         
         %usable units
@@ -155,11 +156,36 @@ for sess = 1:length(session_data)
             su_mu_ind = 1;
         end
         
-        if all(isnan(peak_firing_rate(:,unit)))
-           error('Stable unit but was not procssed for spatial analyis')
-        end
+%         if all(isnan(peak_firing_rate(:,unit)))
+%             error('Stable unit but was not procssed for spatial analyis')
+%         end
         if any(isnan(spatial_info.rate(:,unit)) & peak_firing_rate(:,unit) > 1)
             error('Firing rate for unit is > 1 Hz but not processed')
+        end
+        
+        %---determine number of blocks unit was stable for
+        start_end = valid_trials(:,unit);
+        if isnan(start_end(1))
+            start_end(1) = 1;
+        end
+        if isnan(start_end(2))
+            start_end(2) = length(cfg.trl);
+        end
+        start_end(start_end == 0) = 1;
+        min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
+        max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
+        
+        if max_trial < minimum_trials_1
+            error('Unit should have been stable for more trials to be processed')
+        end
+        
+        if min_trial < 22 %includes fam block
+            min_trial = 22; %remove then count from there
+        end
+        num_blks = floor((max_trial-min_trial+1)/minimum_trials_2);
+        
+        if num_blks < 2
+            continue
         end
         
         spatial_total_used(su_mu_ind) = spatial_total_used(su_mu_ind)+1;
@@ -167,15 +193,30 @@ for sess = 1:length(session_data)
             spatial_total_low_firing(su_mu_ind) =  spatial_total_low_firing(su_mu_ind)+1;
         end
         
+        go_no_go = 0;
         if any(spatial_info.shuffled_rate_prctile(:,unit) > 95) %significant skaggs score
             spatial_skaggs(su_mu_ind) = spatial_skaggs(su_mu_ind)+1;
         end
         if any(spatial_info.shuffled_spatialstability_prctile(:,unit) > 95) %significant spatial stability score
             spatial_stability(su_mu_ind) = spatial_stability(su_mu_ind)+1;
         end
-        if any((spatial_info.shuffled_rate_prctile(:,unit) > 95) &  (spatial_info.shuffled_spatialstability_prctile(:,unit) > 95)) %both skagg and spatially stable
+        if any((spatial_info.shuffled_rate_prctile(:,unit) > 95) & (spatial_info.shuffled_spatialstability_prctile(:,unit) > 95)) %both skagg and spatially stable
             spatial_skaggs_stability(su_mu_ind) = spatial_skaggs_stability(su_mu_ind)+1;
+            go_no_go = 1;
         end
+        
+        
+        if all(isnan(peak_firing_rate(:,unit))) || all(peak_firing_rate(:,unit) < 1)
+            continue %unit doesn't fire enough go to next unit
+        elseif all((spatial_info.shuffled_rate_prctile(:,unit) < 95) & (spatial_info.shuffled_spatialstability_prctile(:,unit) < 95))
+            continue %unit likely not spatial
+        elseif  ~any((spatial_info.shuffled_rate_prctile(:,unit) > 95) & (spatial_info.shuffled_spatialstability_prctile(:,unit) > 95))
+            continue %only process cells that pass both criterion under at least 1 condition
+        end
+        if go_no_go == 0
+            disp('Why')
+        end
+        count2 = count2+1;
     end
 end
 %%
@@ -201,11 +242,11 @@ fprintf('\n')
 fprintf(['Total Usable(%% total) \t  '  num2str(total_used(1)) '(' num2str(percent_total_usable(1)) '%%) \t\t\t '...
     num2str(total_used(2)) '(' num2str(percent_total_usable(2)) '%%)\n'])
 fprintf(['\t 1+ Blks(%% usable) \t  '  num2str(num_blocks(1,1)) '(' num2str(percent_numblks(1,1)) '%%) \t\t ' ...
-   num2str(num_blocks(1,2)) '(' num2str(percent_numblks(1,2)) '%%) \n'])
+    num2str(num_blocks(1,2)) '(' num2str(percent_numblks(1,2)) '%%) \n'])
 fprintf(['\t 2+ Blks(%% usable) \t  '  num2str(num_blocks(2,1)) '(' num2str(percent_numblks(2,1)) '%%) \t\t\t ' ...
-   num2str(num_blocks(2,2)) '(' num2str(percent_numblks(2,2)) '%%) \n'])
+    num2str(num_blocks(2,2)) '(' num2str(percent_numblks(2,2)) '%%) \n'])
 fprintf(['\t 3+ Blks(%% usable) \t  '  num2str(num_blocks(3,1)) '(' num2str(percent_numblks(3,1)) '%%) \t\t\t ' ...
-   num2str(num_blocks(3,2)) '(' num2str(percent_numblks(3,2)) '%%) \n'])
+    num2str(num_blocks(3,2)) '(' num2str(percent_numblks(3,2)) '%%) \n'])
 
 %unusable units
 fprintf('\n')
@@ -213,11 +254,11 @@ fprintf(['Total Unsable(%% total) \t  '  num2str(reason_unused(4,1)) '(' num2str
     num2str(reason_unused(4,2)) '(' num2str(percent_unused(2)) '%%)\n'])
 
 fprintf(['\t Spk Count(%% unusable) \t'  num2str(reason_unused(1,1)) '(' num2str(percent_reason_unused(1,1)) '%%) \t\t ' ...
-   num2str(reason_unused(1,2)) '(' num2str(percent_reason_unused(1,2)) '%%) \n'])
+    num2str(reason_unused(1,2)) '(' num2str(percent_reason_unused(1,2)) '%%) \n'])
 fprintf(['\t Unstable(%% unusable) \t'  num2str(reason_unused(2,1)) '(' num2str(percent_reason_unused(2,1)) '%%) \t\t ' ...
-   num2str(reason_unused(2,2)) '(' num2str(percent_reason_unused(2,2)) '%%) \n'])
+    num2str(reason_unused(2,2)) '(' num2str(percent_reason_unused(2,2)) '%%) \n'])
 fprintf(['\t Quality(%% unusable) \t '  num2str(reason_unused(3,1)) '(' num2str(percent_reason_unused(3,1)) '%%) \t\t ' ...
-   num2str(reason_unused(3,2)) '(' num2str(percent_reason_unused(3,2)) '%%) \n'])
+    num2str(reason_unused(3,2)) '(' num2str(percent_reason_unused(3,2)) '%%) \n'])
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

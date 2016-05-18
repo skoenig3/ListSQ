@@ -1,4 +1,3 @@
-
 function time_locked_analysisV2(data_dir,figure_dir,session_data,task)
 % written by Seth Konig August, 2014
 % updated SDK 1/11/17 to handlde new format and partial session data for

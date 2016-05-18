@@ -56,6 +56,7 @@ end
 %load trial data
 load([data_dir task_file(1:end-11) '-preprocessed.mat'],'data','cfg','valid_trials',...
     'hdr','fixationstats');
+load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat']);
 num_trials = length(cfg.trl);
 
 %NaNs are for start and end trials otherwise cut

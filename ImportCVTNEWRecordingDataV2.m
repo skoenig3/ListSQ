@@ -17,7 +17,7 @@ function ImportCVTNEWRecordingDataV2(data_dir,session_data)
 
 %grab important file information from session_data
 task = 'cvtnew';
- [task_file,~,~,multiunit,unit_names,unit_confidence,sorting_quality,waveform_count]...
+[task_file,~,~,multiunit,unit_names,unit_confidence,sorting_quality,waveform_count]...
     = get_task_data(session_data,task);
 if isempty(task_file)
     warning('No CVTNEW file could be found. Exiting function...')
@@ -68,18 +68,33 @@ end
 data = getPlexonTrialData(cfg);
 
 % import waveforms seperately for some reason couldn't get it to work above
-% import waveforms seperately for some reason couldn't get it to work above
 waveforms = cell(2,length(waveform_channels));
-for wv = 1:length(waveform_channels);
-    spikewaves = read_plexon_nex(cfg.dataset , 'channel',waveform_channels(wv));
-    waveforms{1,wv} = spikewaves.dat;%waveorm shapes
-    waveforms{2,wv} = spikewaves.ts;%waveform timestamps
-    
-    if length(spikewaves.dat) ~= waveform_count(wv)
-        disp(['Warning number of waveforms imported differnet than expected: ' ...
-            'Imported ' num2str(length(spikewaves.dat)) ' but expected ' num2str(waveform_count(wv))]);
+dataWF=readNexFile(cfg.dataset);
+valid_units = [];
+for wv = 1:length(dataWF.neurons);
+    if ~strcmpi(dataWF.neurons{wv}.name(end),'i') %i for invalid waveforms
+        valid_units = [valid_units wv];
     end
 end
+
+for wv = 1:length(valid_units)
+    if isfield(dataWF,'waves') %not sure why this is true
+        waveforms{1,wv} = dataWF.waves{valid_units(wv)}.waveforms;%waveorm shapes
+        waveforms{2,wv} = dataWF.waves{valid_units(wv)}.timestamps;%waveform timestamps
+    else
+        waveforms{1,wv} = [];%waveorm shapes
+        waveforms{2,wv} = dataWF.neurons{valid_units(wv)}.timestamps;%waveform timestamps
+        emailme(['Could not import waveforms only timestampsz! DataWF.waves does not exist for ' task_file])
+    end
+    
+    unit = strfind(unit_names,dataWF.neurons{valid_units(wv)}.name);
+    unit = find(~cellfun(@isempty,unit));
+    if length(waveforms{2,wv}) ~= waveform_count(unit)
+        disp(['Warning number of waveforms imported differnet than expected: ' ...
+            'Imported ' num2str(length(waveforms{2,wv})) ' but expected ' num2str(waveform_count(wv))]);
+    end
+end
+
 
 disp('Data imported Successfully')
 

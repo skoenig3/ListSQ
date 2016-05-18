@@ -120,10 +120,11 @@ if ~isempty(trial_data)
           
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the expected information rates and spatial stability using bootstrapping---%%%
-            shuffled_info_rate.skaggs = NaN(1,numshuffs);
-            shuffled_info_rate.spatialstability = NaN(1,numshuffs);
+        
             if observed_info_rate.skaggs ~= 0 %i.e. not zero firing rate or 100% uniform
-                for shuffled = 1:numshuffs;
+                    skaggs = NaN(1,numshuffs);
+                    spatialstability = NaN(1,numshuffs);
+                parfor shuffled = 1:numshuffs;
                     
                     %previous method of shuffling data within trial
                     %shuffled_firing = circshift_row(spike_times);
@@ -136,8 +137,8 @@ if ~isempty(trial_data)
 
                     lambda_x = filtered_space./filtered_time;
                     lambda = nansum(nansum(lambda_x.*p_x));
-                    shuffled_info_rate.skaggs(shuffled) = nansum(p_log_p(lambda,lambda_x,p_x));
-                    if shuffled_info_rate.skaggs(shuffled) < 0
+                    skaggs(shuffled) = nansum(p_log_p(lambda,lambda_x,p_x));
+                    if  skaggs(shuffled) < 0
                         error('Information should be greater than 0. WTF?')
                     end
                     
@@ -152,9 +153,15 @@ if ~isempty(trial_data)
                     ratemap2 = filtered_space2./filtered_time2;
                     ratemap2(isnan(ratemap2)) = 0;
                     
-                    shuffled_info_rate.spatialstability(shuffled) = corr2(ratemap1,ratemap2);
+                   spatialstability(shuffled) = corr2(ratemap1,ratemap2);
                 end
+                shuffled_info_rate.skaggs = skaggs;
+                shuffled_info_rate.spatialstability = spatialstability;
+            else
+                shuffled_info_rate.skaggs = [];
+                shuffled_info_rate.spatialstability = [];
             end
+            
             
           case 'spatial_cvtnew' %special case since rotating spike train is not
               %an effective measure due correlation in dot position over time

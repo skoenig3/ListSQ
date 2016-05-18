@@ -1,6 +1,16 @@
-function [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,waveform_count] = get_task_data(session_data,task)
+function [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,...
+    sorting_quality,waveform_count,lfp_quality] = get_task_data(session_data,task)
 %function grabs desired task data
 
+task_file = [];
+item_file = [];
+cnd_file = [];
+multiunit = [];
+unit_names = [];
+unit_confidence = [];
+sorting_quality = [];
+waveform_count = [];
+lfp_quality = [];
 if ~isempty(strfind(lower(session_data.task1),lower(task)))
     
     task_file = session_data.task1_file;
@@ -17,6 +27,7 @@ if ~isempty(strfind(lower(session_data.task1),lower(task)))
     unit_confidence = session_data.task1_unit_confidence;
     sorting_quality = session_data.task1_unit_cutQuality;
     unit_names =  session_data.task1_unit_names;
+    lfp_quality = session_data.task1_LFP;
     
 elseif isfield(session_data,'task2')
     if ~isempty(strfind(lower(session_data.task2),lower(task)))
@@ -35,17 +46,10 @@ elseif isfield(session_data,'task2')
         unit_confidence = session_data.task2_unit_confidence;
         sorting_quality = session_data.task2_unit_cutQuality;
         unit_names =  session_data.task2_unit_names;
+        lfp_quality = session_data.task2_LFP;
     end
     
 else
     warning('Could not identify the proper tasks, exiting function')
-    task_file = [];
-    item_file = [];
-    cnd_file = [];
-    multiunit = [];
-    unit_names = [];
-    unit_confidence = [];
-    sorting_quality = [];
-    waveform_count = [];
 end
 

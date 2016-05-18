@@ -1621,7 +1621,7 @@ end
 %%
 %%---[3.2] Generate item and condition file with 2 predictable sequences for sets 27+---%%
 % modified by Seth Konig October 19-20, 2014
-set_nums = [27:55];%always start from 27 otherwise won't regenerate perfectly
+set_nums = [27:72];%always start from 27 otherwise won't regenerate perfectly
 number_of_sequences = 2;
 number_of_items = 4; %# of items per sequence
 number_sequence_trials_btwn_images = 2;
@@ -1648,7 +1648,7 @@ sizey = 19;
 clear x y
 [cc,rr] = meshgrid(1:sizex,1:sizey);
 rand('seed',141019); %seed randomly so we can regenerate files if lost
-for i = 1:500;
+for i = 1:1000;
     valid_points = ones(sizey,sizex);
     item_locations{i} = NaN(number_of_items*2,number_of_sequences);
     seq = 1;
@@ -2265,10 +2265,10 @@ end
 % of the original name of files. Original files are put into used libary. 
 root_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\FlickrImages\';
 unused_dir = 'Unused\';
-used_dir ='Used\'
+used_dir ='Used\';
 
 cd([root_dir unused_dir]);
-setnums = [1:51]; %do not write over original sets!!! Start at 1 will skip ones already created if in root_dir
+setnums = [1:72]; %do not write over original sets!!! Start at 1 will skip ones already created if in root_dir
 num_images_per_set = 96;
 for set = setnums;
     d=dir([root_dir unused_dir '*.bmp']);

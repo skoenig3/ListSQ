@@ -6,18 +6,22 @@ function [itmlist,sequence_items,sequence_locations] = read_ListSQ_itm_and_cnd_f
 % items (the largets item #) are assoicated with which sequence.
 
 %remove any preceding or trailing spaces
-itmfile = strtrim(itmfile);
-cndfile = strtrim(cndfile);
-
 if nargin == 1
+    itmfile = strtrim(itmfile);
     ITMFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' itmfile];
     CNDFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' itmfile(1:end-4) '.cnd'];
 elseif nargin == 2
-     ITMFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' itmfile];
+    itmfile = strtrim(itmfile);
+    cndfile = strtrim(cndfile);
+    ITMFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' itmfile];
     CNDFile = ['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\' cndfile];
 else
     error('Too many inputs')
 end
+
+
+
+
 
 
 itmfil=[];

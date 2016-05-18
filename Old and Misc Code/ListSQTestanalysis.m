@@ -1,10 +1,10 @@
 % test to see if ListSQ was running correctly without a monkey present
 cd('C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Old and Misc Code\');
-[time_arr,event_arr,eog_arr,epp_arr,header,trialcount]  = get_ALLdata('TT141020.2');
+file = ['\\research.wanprc.org\research\Buffalo Lab\Cortex Data\Tobii\TO160107.3'];
+[time_arr,event_arr,eog_arr,epp_arr,header,trialcount]  = get_ALLdata(file);
 
-ITMFile = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\ListSQ07.itm';
-
-CNDFile = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\ListSQ07.cnd';
+ITMFile = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\ListSQ17.itm';
+CNDFile = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Item and Conditions Files\ListSQ17.cnd';
 
 
 itmfil=[];
@@ -150,7 +150,7 @@ for rptlop = 1:numrpt
         end
     end
 end
-
+%%
 imgdur = [];
 crossdur = [];
 for trial = 1:length(per);
@@ -195,6 +195,6 @@ end
 
 %%
 type = [];
-for trial =sum 1:length(per);
+for trial =1:length(per);
     type(trial) = per(trial).cnd;
 end
