@@ -2,7 +2,10 @@ function trl = trialfuncvtnew(cfg)
 % written by Seth Konig on August 12, 2014
 % Cuts out all of the trial data from one session.
 % Structure of a trial in event codes:
+% 15 start pre-trial
+% 16 end pre-trial
 % 150 TRIAL_START
+% 151 Trial end
 % 100 start eye data
 % 5000+x trial number
 % 1000+x condition number
@@ -49,13 +52,16 @@ trial_count = 1;
 starts = find(event(2,:) == trial_start);
 ends = find(event(2,:) == trial_end);
 if starts(1) > ends(1); %must have started recording after the task started
-    ends(1) = [];
-    starts(end) = [];
+    if event(2,1) == 150 %skipped pre-trial for whatever reason
+        starts =[1 starts]; %append first event to starts
+    else
+        ends(1) = []; %remove ends since can't use trial
+    end
 end
 if length(starts)-length(ends) == 1;
     starts(end) = [];
 elseif  length(starts)-length(ends) > 1
-    disp('error something wrong with the encodes. More than 1 difference in when trial starts and trials end');
+    error('error something wrong with the encodes. More than 1 difference in when trial starts and trials end');
 end
 for t = 1:length(starts);
     trial{1,t} = event(2,starts(t):ends(t)); %event codes
@@ -76,11 +82,11 @@ for rptlop = 1:numrpt
         trlbegind = find(trial{1,rptlop} == 15); % start at pretrial
         trlendind = find(trial{1,rptlop} == 151); % end at end trial
         if length( trlbegind) > 1
-            trlbegind = trlbegind(2);
-            trlendind = trlendind(2);
+            trlbegind = trlbegind(1);
+            trlendind = trlendind(1);
         end
         cndnumind = find(trial{1,rptlop} >= 1000 & trial{1,rptlop} < 2000);
-        begtimdum = trial{2,rptlop}(trlbegind)-100;
+        begtimdum = trial{2,rptlop}(trlbegind);
         endtimdum = trial{2,rptlop}(trlendind);
         if endtimdum > begtimdum
             valrptcnt = valrptcnt + 1;
