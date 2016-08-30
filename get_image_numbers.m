@@ -12,7 +12,7 @@ for t = 1:length(cfg.trl);
                 warning('More than 1 condition for this trial')
             else
                 which_img(img_count) = itmlist(cfg.trl(t).cnd-1000);
-                img_cnd(img_count) = cfg.trl(t).cnd;
+                img_cnd(img_count) = cfg.trl(t).cnd; 
             end
             img_count = img_count+1;
         end
@@ -26,8 +26,14 @@ for img = 1:max(which_img)
     if ~isempty(imgind);
         novel_vs_repeat(imgind(1)) = 1;
     end
-    if length(imgind) > 1
+    if length(imgind) == 2
         novel_vs_repeat(imgind(2)) = 2;
+    elseif length(imgind) == 3
+        emailme(['Temporal Analysis Importing Data found 3 image presentations. Img #' num2str(img) ' ' cfg.dataset(end-20:end-11)])
+        %remove that image from analysis. For TO set 13 seems to be a random 
+        %cortex accidental bug/error not in item/cnd file. Error is found
+        %in both .plx and cortex save file. Should be image 65
+        which_img(imgind) = NaN; %will get removed when laundried
     end
 end
 end

@@ -20,21 +20,21 @@ function List_Saccade_Direction_AnalysisV2(data_dir,figure_dir,session_data)
 %   2) Saves processed data to data_dir tagged with '-Eyemovement_Locked_List_results'
 
 task = 'ListSQ';
-twin = 150;% how much time to take before and after saccade.
+twin = 100;% how much time to take before and after saccade.
 tstart = 500; %how much after the image turns on to ignore, trying to ignore visual response
 bin_deg =4; %number of degrees per bin
 trial_start_code = 15;
 img_on_code = 23;
 img_off_code = 24;
 smval = 4;% moving average filter width for saccade angle
-smval2 = 12;% gaussian window std for dofill smoothign of saccade locked activity
+smval2 = 30;% gaussian window std for dofill smoothign of saccade locked activity
 saccade_ampltidue_threshold = 2*24; %miniumum saccade amplitude to use
 
 degrees = [0:bin_deg:360]-180; %binned degrees
 amplitude = saccade_ampltidue_threshold/24:2:25; %binned amplitude
 
 Fs = 1000;
-numshuffs = 100;
+numshuffs = 10;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---import data & get successful trials---%%%

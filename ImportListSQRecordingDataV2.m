@@ -86,7 +86,9 @@ for wv = 1:length(valid_units)
     unit = strfind(unit_names,dataWF.neurons{valid_units(wv)}.name);
     unit = find(~cellfun(@isempty,unit));
     if length(waveforms{2,wv}) ~= waveform_count(unit)
-        disp(['Warning number of waveforms imported differnet than expected: ' ...
+        emailme([task_file ' spike count does not match excel file'])
+
+        error(['Warning number of waveforms imported differnet than expected: ' ...
             'Imported ' num2str(length(waveforms{2,wv})) ' but expected ' num2str(waveform_count(wv))]);
     end
 end
@@ -96,7 +98,6 @@ end
 %didn't get fixed properly by plexUtil. SDK 1/10/16.
 % Gaps can only be in continuous data since they're replaced with NaNs
 % while spike channels are just buffed with 0's
-%noticed
 lfp_channels = find_desired_channels(cfg,'LFP');
 gaps = cell(1,13);
 for channel = lfp_channels(1):length(data)
@@ -160,8 +161,12 @@ if any(~gapsQ) %then there is a gap in the data somewhere
     end
 end
 
+%---Verify that trial data is the same length across events and spikes/LFPs
+%may happen on the last trial(s) if ended recording in middle of trial should
+%be only off by 1 trial but can occassionally happen on more for unknown reasons 
 if length(cfg.trl) > length(data(1).values)
     disp('Warning: there is less data trials than trials defined by strobes')
+    disp([num2str(length(cfg.trl)) ' trials in cfg while ' num2str(length(data(1).values)) ' in spike data'])
     reply = input('Do you wish to remove cfg.trl trials Y/N [Y]:','s');
     if strfind(lower(reply),'y')
         num_trials = length(data(1).values);

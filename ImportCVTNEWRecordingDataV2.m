@@ -17,8 +17,8 @@ function ImportCVTNEWRecordingDataV2(data_dir,session_data)
 
 %grab important file information from session_data
 task = 'cvtnew';
-[task_file,~,~,multiunit,unit_names,unit_confidence,sorting_quality,waveform_count]...
-    = get_task_data(session_data,task);
+[task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,...
+    sorting_quality,waveform_count] = get_task_data(session_data,task);
 if isempty(task_file)
     warning('No CVTNEW file could be found. Exiting function...')
     return
@@ -57,9 +57,9 @@ for l = 1:length(hdr.label);
                 waveform_channels= [waveform_channels l];
             end
         end
-    elseif ~isempty(strfind(hdr.label{l},'X')); %horiziontal eye data
+    elseif length(hdr.label{l}) == 1 && ~isempty(strfind(hdr.label{l},'X')); %horiziontal eye data
         cfg.channel = [cfg.channel hdr.label(l)];
-    elseif ~isempty(strfind(hdr.label{l},'Y')); %vertical eye data
+    elseif length(hdr.label{l}) == 1 && ~isempty(strfind(hdr.label{l},'Y')); %vertical eye data
         cfg.channel = [cfg.channel hdr.label(l)];
     elseif ~isempty(strfind(hdr.label{l},'AD'));  %LFP data by channel
         cfg.channel = [cfg.channel hdr.label(l)];
@@ -78,21 +78,35 @@ for wv = 1:length(dataWF.neurons);
 end
 
 for wv = 1:length(valid_units)
-    if isfield(dataWF,'waves') %not sure why this is true
-        waveforms{1,wv} = dataWF.waves{valid_units(wv)}.waveforms;%waveorm shapes
-        waveforms{2,wv} = dataWF.waves{valid_units(wv)}.timestamps;%waveform timestamps
-    else
-        waveforms{1,wv} = [];%waveorm shapes
-        waveforms{2,wv} = dataWF.neurons{valid_units(wv)}.timestamps;%waveform timestamps
-        emailme(['Could not import waveforms only timestampsz! DataWF.waves does not exist for ' task_file])
-    end
+    waveforms{1,wv} = dataWF.waves{valid_units(wv)}.waveforms;%waveorm shapes
+    waveforms{2,wv} = dataWF.waves{valid_units(wv)}.timestamps;%waveform timestamps
     
     unit = strfind(unit_names,dataWF.neurons{valid_units(wv)}.name);
     unit = find(~cellfun(@isempty,unit));
     if length(waveforms{2,wv}) ~= waveform_count(unit)
-        disp(['Warning number of waveforms imported differnet than expected: ' ...
+        emailme([task_file ' spike count does not match excel file'])
+
+        error(['Warning number of waveforms imported differnet than expected: ' ...
             'Imported ' num2str(length(waveforms{2,wv})) ' but expected ' num2str(waveform_count(wv))]);
     end
+end
+
+%---Verify that trial data is the same length across events and spikes/LFPs
+%may happen on the last trial if ended recording in middle of trial should
+%be only off by 1 trial
+if length(cfg.trl) > length(data(1).values)
+    disp('Warning: there is less data trials than trials defined by strobes')
+    disp([num2str(length(cfg.trl)) ' trials in cfg while ' num2str(length(data(1).values)) ' in spike data'])
+    reply = input('Do you wish to remove cfg.trl trials Y/N [Y]:','s');
+    if strfind(lower(reply),'y')
+        num_trials = length(data(1).values);
+        cfg.trl = cfg.trl(1:num_trials);
+    else
+        error('Data structure and cfg structure do not match in length')
+    end
+    
+elseif length(data(1).values) > length(cfg.trl)
+    error('There are more data trials than trials defined by strobes')
 end
 
 

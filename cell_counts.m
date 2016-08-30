@@ -27,6 +27,8 @@ num_blocks = zeros(3,2); %row 1, 1+ blocks, row 2 2+ blocks, row 3 3+ blocks
 reason_unused = zeros(4,2); %row 1 insufficeint spike count, row 2,
 % not stable for sufficeint trials, row 3 poorly isolated/not confident
 % unit is real, row 4 sum of rows 1-3
+barely_active_count = [0 0];%column 1 total average firing rate < 1 but not all, total with sig skagg and stability socres
+low_sig = 0;
 
 %---Variables for Spatial analysis---%
 spatial_total_used = [0 0]; %all usable units should be same as total_used
@@ -49,7 +51,12 @@ for sess = 1:length(session_data)
         disp('No file could be found for specificed task. Exiting function...')
         continue
     end
-    load([data_dir task_file(1:end-11) '-preprocessed.mat'],'valid_trials','stability_attribute','cfg','hdr','data');
+    try
+        load([data_dir task_file(1:end-11) '-preprocessed.mat'],'valid_trials','stability_attribute','cfg','hdr','data');
+    catch
+        disp(['Cant find ' task_file(1:end-11)])
+        continue
+    end
     
     %get unit data
     [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
@@ -134,7 +141,15 @@ for sess = 1:length(session_data)
     %%%---Import Spatial Analysis Data---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %get important task related data
-    load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'peak_firing_rate','spatial_info');
+    try
+        load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'peak_firing_rate','spatial_info');
+    catch
+        if num_units == 0 %then no units so shouldn't have anything
+            continue
+        else
+            error('should have run spatial analysis had units')
+        end
+    end
     
     if num_units ~= size(peak_firing_rate,2)
         error('# of units mismatch: Wrong file imported or data not processed properly')
@@ -203,6 +218,17 @@ for sess = 1:length(session_data)
         if any((spatial_info.shuffled_rate_prctile(:,unit) > 95) & (spatial_info.shuffled_spatialstability_prctile(:,unit) > 95)) %both skagg and spatially stable
             spatial_skaggs_stability(su_mu_ind) = spatial_skaggs_stability(su_mu_ind)+1;
             go_no_go = 1;
+        end
+        
+        if all(peak_firing_rate(:,unit) < 1) && (spatial_info.shuffled_rate_prctile(:,unit) > 95) && (spatial_info.shuffled_spatialstability_prctile(:,unit) > 95)
+           low_sig = low_sig+1; 
+        end
+        
+        if peak_firing_rate(3,unit) < 1 && any(peak_firing_rate(:,unit) > 1)
+            barely_active_count(1) =   barely_active_count(1)+1;
+            if any((spatial_info.shuffled_rate_prctile(:,unit) > 95) & (spatial_info.shuffled_spatialstability_prctile(:,unit) > 95))
+                 barely_active_count(2) =  barely_active_count(2)+1;
+            end
         end
         
         

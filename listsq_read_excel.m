@@ -37,7 +37,7 @@ function listsq_read_excel(data_dir,excel_file)
 %find where each session starts using #### as the key
 session_start = [];
 for row = 1:size(raw,1)
-    if strcmpi(raw{row,1},'####')
+    if strcmpi(raw{row,1},'####') || strcmpi(raw{row,1},'C####')
         session_start = [session_start, row];
     end
 end
@@ -75,6 +75,7 @@ for sess = 1:length(session_start);
                 session_data{sess}.task1_unit_confidence = []; %confidence that what is sorted is a real spike
                 session_data{sess}.task1_unit_cutQuality = [];  %quality of cluster cutting using in PCA space from noise
                 session_data{sess}.task1_unit_MultiunitSeperability = [];%quality of multiunit seperability
+                session_data{sess}.task1_unit_comments = {}; %extra comments by person who sorted
                 
             elseif num_tasks ==  2
                 session_data{sess}.task2_file = string_trim(sess_raw{row+1,1});
@@ -86,6 +87,7 @@ for sess = 1:length(session_start);
                 session_data{sess}.task2_unit_confidence = []; %confidence that what is sorted is a real spike
                 session_data{sess}.task2_unit_cutQuality = [];  %quality of cluster cutting using in PCA space from noise
                 session_data{sess}.task2_unit_MultiunitSeperability = [];%quality of multiunit seperability
+                session_data{sess}.task2_unit_comments = {}; %extra comments by person who sorted
             else
                 disp('More than 2 tasks run')
             end
@@ -103,10 +105,12 @@ for sess = 1:length(session_start);
                     session_data{sess}.task1_unit_confidence = [session_data{sess}.task1_unit_confidence NaN];
                     session_data{sess}.task1_unit_cutQuality = [session_data{sess}.task1_unit_cutQuality NaN];
                     session_data{sess}.task1_unit_MultiunitSeperability = [session_data{sess}.task1_unit_MultiunitSeperability NaN];
+                    session_data{sess}.task1_unit_comments = [session_data{sess}.task1_unit_comments  {NaN}];
                 else
                     session_data{sess}.task1_unit_confidence = [session_data{sess}.task1_unit_confidence sess_raw{row,3}];
                     session_data{sess}.task1_unit_cutQuality = [session_data{sess}.task1_unit_cutQuality sess_raw{row,4}];
                     session_data{sess}.task1_unit_MultiunitSeperability = [session_data{sess}.task1_unit_MultiunitSeperability sess_raw{row,5}];
+                    session_data{sess}.task1_unit_comments = [session_data{sess}.task1_unit_comments  sess_raw(row,6)];
                 end
             elseif num_tasks ==  2
                 session_data{sess}.task2_unit_names = [session_data{sess}.task2_unit_names sess_raw(row,1)];
@@ -115,10 +119,12 @@ for sess = 1:length(session_start);
                     session_data{sess}.task2_unit_confidence = [session_data{sess}.task2_unit_confidence NaN];
                     session_data{sess}.task2_unit_cutQuality = [session_data{sess}.task2_unit_cutQuality NaN];
                     session_data{sess}.task2_unit_MultiunitSeperability = [session_data{sess}.task2_unit_MultiunitSeperability NaN];
+                    session_data{sess}.task2_unit_comments = [session_data{sess}.task2_unit_comments  {NaN}];
                 else
                     session_data{sess}.task2_unit_confidence = [session_data{sess}.task2_unit_confidence sess_raw{row,3}];
                     session_data{sess}.task2_unit_cutQuality = [session_data{sess}.task2_unit_cutQuality sess_raw{row,4}];
                     session_data{sess}.task2_unit_MultiunitSeperability = [session_data{sess}.task2_unit_MultiunitSeperability sess_raw{row,5}];
+                    session_data{sess}.task2_unit_comments = [session_data{sess}.task2_unit_comments  sess_raw(row,6)];
                 end
             end
         end

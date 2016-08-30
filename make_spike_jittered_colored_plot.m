@@ -29,18 +29,18 @@ for group = 1:length(clrs)
     x_sub = x(trial_ind,:);
     y_sub = y(trial_ind,:);
     
-    [trial,time] = find(spk_times);
+    [trial,time] = find(spk_times == 1);
     spikeind = sub2ind(size(x_sub),trial,time);
     
     xs = x_sub(spikeind);
     ys = y_sub(spikeind);
     [xs,ys] = remove_nans(xs,ys);
     
-    xs = xs+randi(jitter,length(xs),1);
-    ys = ys+randi(jitter,length(ys),1);
-    
-    
-    plot(xs,ys,['.' clrs(group)])
+    if ~isempty(xs)
+        xs = xs+randi(jitter,length(xs),1);
+        ys = ys+randi(jitter,length(ys),1);
+        plot(xs,ys,['.' clrs(group)],'markersize',4)
+    end
 end
 hold off
 set(gca,'Xtick',[]);

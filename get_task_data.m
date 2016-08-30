@@ -1,5 +1,5 @@
 function [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,...
-    sorting_quality,waveform_count,lfp_quality] = get_task_data(session_data,task)
+    sorting_quality,waveform_count,lfp_quality,comments] = get_task_data(session_data,task)
 %function grabs desired task data
 
 task_file = [];
@@ -11,6 +11,7 @@ unit_confidence = [];
 sorting_quality = [];
 waveform_count = [];
 lfp_quality = [];
+comments = [];
 if ~isempty(strfind(lower(session_data.task1),lower(task)))
     
     task_file = session_data.task1_file;
@@ -28,6 +29,7 @@ if ~isempty(strfind(lower(session_data.task1),lower(task)))
     sorting_quality = session_data.task1_unit_cutQuality;
     unit_names =  session_data.task1_unit_names;
     lfp_quality = session_data.task1_LFP;
+    comments = session_data.task1_unit_comments;
     
 elseif isfield(session_data,'task2')
     if ~isempty(strfind(lower(session_data.task2),lower(task)))
@@ -47,6 +49,7 @@ elseif isfield(session_data,'task2')
         sorting_quality = session_data.task2_unit_cutQuality;
         unit_names =  session_data.task2_unit_names;
         lfp_quality = session_data.task2_LFP;
+        comments = session_data.task2_unit_comments;
     end
     
 else

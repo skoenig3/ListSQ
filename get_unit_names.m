@@ -1,4 +1,5 @@
-function [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,multiunit,unit_confidence,sorting_quality)
+function [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
+    multiunit,unit_confidence,sorting_quality,comments)
 %function just grabs unit names. Session data contains sorting quality,unit
 %names, multiunit seperability, etc. Some units have 0 waveforms and are
 %not imported (and therefore not present in data or cfg structures) so need to match 
@@ -24,7 +25,11 @@ function [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_nam
 
 unit_channels = find_desired_channels(cfg,'sig');
 num_units = length(unit_channels);
-unit_stats = cell(3,num_units);
+if nargin == 7 
+    comments = cell(1,length(unit_names));
+end
+
+unit_stats = cell(4,num_units);
 mu = NaN(1,num_units);
 for unit = 1:num_units
     unit_stats{1,unit} = hdr.label{data(unit).whichchannel};
@@ -37,11 +42,12 @@ for unit = 1:num_units
             end
             unit_stats{2,unit} = unit_confidence(n);
             unit_stats{3,unit} = sorting_quality(n);
+            unit_stats{4,unit} = comments{n};
             break
         end
     end
 end
 if any(any(cellfun(@isempty,unit_stats)))
-    warning('No units found!!! Unit data may not have been not imported correctly!!!')
+    warning('No unit found!!! Unit data may not have been not imported correctly!!!')
 end
 multiunit = mu;

@@ -6,7 +6,7 @@ jitter = 12; %1/2 dva
 x = position(1:2:end,:);
 y = position(2:2:end,:);
 
-[trial,time] = find(spike_times);
+[trial,time] = find(spike_times == 1);
 spikeind = sub2ind(size(x),trial,time);
 
 xs = x(spikeind);
@@ -19,7 +19,7 @@ ys = ys+randi(jitter,length(ys),1);
 subplot(src(1),src(2),subnum)
 hold on
 plot(x',y','color',[0.8 0.8 0.8])
-plot(xs,ys,'.r')
+plot(xs,ys,'.r','markersize',4)
 hold off
 set(gca,'Xtick',[]);
 set(gca,'Ytick',[]);

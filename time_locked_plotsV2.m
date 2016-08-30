@@ -1,4 +1,5 @@
-function time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,infodata,taskdata,unit_names,smval)
+function time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,...
+    infodata,taskdata,unit_names,smval,fr_threshold)
 % written by Seth Konig August, 2014. Updated to V2 during January 2016 to
 % handle partial session data for when each unit was stable SDK
 % generates and save plots for time locked spike analysis
@@ -37,16 +38,19 @@ function time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,in
 %   1) saved figures into figure_dir
 
 tooslow_firing_folder = [figure_dir '\FiringRateTooSlow_Temporal\'];
-fr_threshold = 1; %peak rate must be greater than 1 Hz to process
 
 num_units = size(time_lock_firing,2);
 task_type = taskdata.task_type;
+peak_firing_rate = taskdata.peak_firing_rate;
 
 switch task_type
     case 'ListSQ_Sequence'
         
         which_sequence = taskdata.which_sequence;
         for unit = 1:num_units
+            if isempty(time_lock_firing{1,unit})
+                continue
+            end
             figure
             
             ylims = NaN(1,13);
@@ -85,44 +89,45 @@ switch task_type
                 end
             end
             
-            temp_data1 =[];
-            temp_data2 =[];
-            for event = 2:13;
-                temp_data1 = [temp_data1; epoch_data.firing_rates{event,unit,1}/epoch_data.dur(event,unit,1)];
-                temp_data2 = [temp_data2; epoch_data.firing_rates{event,unit,2}/epoch_data.dur(event,unit,1)];
+            if any(peak_firing_rate(:,unit) > fr_threshold)
+                temp_data1 =[];
+                temp_data2 =[];
+                for event = 2:13;
+                    temp_data1 = [temp_data1; epoch_data.firing_rates{event,unit,1}/epoch_data.dur(event,unit,1)];
+                    temp_data2 = [temp_data2; epoch_data.firing_rates{event,unit,2}/epoch_data.dur(event,unit,1)];
+                end
+                means(1,end) = nanmean(temp_data1);
+                means(2,end) = nanmean(temp_data2);
+                stds(1,end) = nanstd(temp_data1);
+                stds(2,end) = nanstd(temp_data2);
+                numpoints(1,end) = sum(~isnan(temp_data1));
+                numpoints(2,end) = sum(~isnan(temp_data2));
+                [~,all_pval] =kstest2(temp_data1,temp_data2); %determine if across all epochs there a difference in firing rate
+                
+                subplot(4,4,[14 15 16])
+                hold on
+                bar(means')
+                errorb(means',stds'./sqrt(numpoints'));
+                ylabel('Firing Rate')
+                xlabel('Epoch')
+                title('Average Firing Rate by Epoch')
+                set(gca,'Xtick',1:14)
+                set(gca,'XtickLabel',[num2cell(1:13) {'all'}])
+                xlim([0 15])
+                yl = ylim;
+                ylim([0 yl(2)]);
+                
+                % plot astriks (*) above epochs in which firing rate was
+                % significantly different between sequences in an epoch
+                if all_pval < 0.05
+                    plot(14,yl(2)-yl(2)/10,'*k')
+                end
+                sig_sequence_effect = find(epoch_data.pvals(:,unit) < 0.05);
+                for sse = 1:length(sig_sequence_effect)
+                    plot(sig_sequence_effect(sse),yl(2)-yl(2)/10,'*k')
+                end
+                hold off
             end
-            means(1,end) = nanmean(temp_data1);
-            means(2,end) = nanmean(temp_data2);
-            stds(1,end) = nanstd(temp_data1);
-            stds(2,end) = nanstd(temp_data2);
-            numpoints(1,end) = sum(~isnan(temp_data1));
-            numpoints(2,end) = sum(~isnan(temp_data2));
-            [~,all_pval] =kstest2(temp_data1,temp_data2); %determine if across all epochs there a difference in firing rate
-            
-            subplot(4,4,[14 15 16])
-            hold on
-            bar(means')
-            errorb(means',stds'./sqrt(numpoints'));
-            ylabel('Firing Rate')
-            xlabel('Epoch')
-            title('Average Firing Rate by Epoch')
-            set(gca,'Xtick',1:14)
-            set(gca,'XtickLabel',[num2cell(1:13) {'all'}])
-            xlim([0 15])
-            yl = ylim;
-            ylim([0 yl(2)]);
-            
-            % plot astriks (*) above epochs in which firing rate was
-            % significantly different between sequences in an epoch
-            if all_pval < 0.05
-                plot(14,yl(2)-yl(2)/10,'*k')
-            end
-            sig_sequence_effect = find(epoch_data.pvals(:,unit) < 0.05);
-            for sse = 1:length(sig_sequence_effect)
-                plot(sig_sequence_effect(sse),yl(2)-yl(2)/10,'*k')
-            end
-            
-            hold off
             
             
             max_y = 5*round(max(ylims)/5);
@@ -141,9 +146,9 @@ switch task_type
                 save_and_close_fig(tooslow_firing_folder,[task_file(1:end-11) '_' unit_names.name{unit} '_Sequence-time_locked_analysis']);
             else
                 if unit_names.multiunit(unit)
-                    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
+                    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List-time_locked_analysis']);
                 else
-                    save_and_close_fig([figure_dir '\MultiUnit\',[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
+                    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_Sequence-time_locked_analysis']);
                 end
             end
         end
@@ -155,6 +160,10 @@ switch task_type
         smval = smval(1);
         novel_vs_repeat = taskdata.novel_vs_repeat;
         for unit = 1:num_units
+            if isempty(time_lock_firing{1,unit})
+                continue
+            end
+            
             figure
             
             ylims = NaN(1,6);
@@ -205,8 +214,23 @@ switch task_type
             else
                 subtitle(unit_names.name{unit});
             end
-            save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List-time_locked_analysis']);
             
+             if unit_names.multiunit(unit)
+                 subtitle(['Multiunit ' unit_names.name{unit} ]);
+             else
+                 subtitle(unit_names.name{unit});
+             end
+             if all(peak_firing_rate(:,unit) < fr_threshold) %silent neuron
+                 save_and_close_fig(tooslow_firing_folder,[task_file(1:end-11) '_' unit_names.name{unit} '_List-time_locked_analysis']);
+             else
+                 if unit_names.multiunit(unit)
+                     save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List-time_locked_analysis']);
+                 else
+                     save_and_close_fig([figure_dir '\MultiUnit\'],[task_file(1:end-11) '_' unit_names.name{unit} '_List_time_locked_analysis']);
+                 end
+             end
+             
+             
             
             %plot image data locked to crosshair appearance and fixation
             figure
@@ -242,9 +266,9 @@ switch task_type
                 save_and_close_fig(tooslow_firing_folder,[task_file(1:end-11) '_' unit_names.name{unit} '_List2-time_locked_analysis']);
             else
                 if unit_names.multiunit(unit)
-                    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
+                    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List2-time_locked_analysis']);
                 else
-                    save_and_close_fig([figure_dir '\MultiUnit\',[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
+                    save_and_close_fig([figure_dir '\MultiUnit\'],[task_file(1:end-11) '_' unit_names.name{unit} '_List2_time_locked_analysis']);
                 end
             end
         end
@@ -349,7 +373,7 @@ if ~isempty(t)
     else
         title(num_trial_str);
     end
-    ylimit = max(y)*1.2;
+    ylimit = max(y)*1.1;
 else
     ylimit = NaN;
 end
@@ -391,8 +415,8 @@ if ~isempty(t) && ~isempty(time_matrix)
         these_time_matrix = these_time_matrix(:,enough_data);
         
         [~,~,~,y] =dofill(these_time,these_time_matrix,clr(dur),1,smval);
-        if 1.2*max(y) < 2.5*mean(y)
-            ylimit = max(ylimit,1.2*max(y));
+        if 1.1*max(y) < 2.5*mean(y)
+            ylimit = max(ylimit,1.1*max(y));
         else
             ylimit = max(ylimit,2.5*mean(y));
         end
@@ -424,7 +448,7 @@ set(gca,'XtickLabel',num2cell((0:timestep:size(time_matrix1,2))-t0));
 ylabel('Firing Rate (Hz)')
 xlabel(['Time from ' epoch_name ' (ms)'])
 
-num_trial_str = ['n_1 = ' num2str(size(time_matrix1,1)) ' n_2 = ' num2str(size(time_matrix1,1))];
+num_trial_str = ['n_1 = ' num2str(size(time_matrix1,1)) ' n_2 = ' num2str(size(time_matrix2,1))];
 if any(inforate > info95)
     title([num_trial_str ', Bits_{95} = ' num2str(inforate(end))]);
 elseif any(inforate > info90)

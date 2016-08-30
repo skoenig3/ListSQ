@@ -4,8 +4,7 @@ function [desired_channels] = find_desired_channels(cfg,channel_type)
 % array.
 %
 % Inputs:
-%   1) hdr: header for plexon_nex file
-%   2) data: data structure array containing spike times, LFPs, etc.
+%   1) cfg: configuration and data file data
 %   3) channel_type: which type of channel are you looking for i.e. units,
 %   LFPs, or eye [data]
 
@@ -26,7 +25,7 @@ switch channel_type
         temp = strfind(mychannels,'sig');
         temp(cellfun(@isempty,temp)) = {0};
         desired_channels = find(cell2mat(temp));
-    case 'lfp'
+    case {'lfp','lfps'}
         temp = strfind(mychannels,'AD');
         temp(cellfun(@isempty,temp)) = {0};
         desired_channels = find(cell2mat(temp));

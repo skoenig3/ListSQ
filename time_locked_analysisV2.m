@@ -17,12 +17,16 @@ function time_locked_analysisV2(data_dir,figure_dir,session_data,task)
 %   1) Saves figures to figure_dir
 %   2) Saves processed data to data_dir tagged with '-time_locked_results'
 
-twin = 750;% how much time to take before and after an event.
+figure_dir = [figure_dir 'Time Analysis\'];
+twin = 500;% how much time to take before and after an event.
 % Delay in HPC to visual stimuli around 150-200 ms so probably want at least 2x this
-numshuffs = 500; %recommend this is between 100 & 1000, for bootstrapping to
+numshuffs = 1000; %recommend this is between 100 & 1000, for bootstrapping to
 % dtermine significance
-fr_threshold = 1; %peak rate must be greater than 1 Hz to process. Don't want to waste 
+fr_threshold = 1; %peak rate must be greater than 1 Hz to process. Don't want to waste
 %processing/shuffling time on "silent neurons"
+min_blks = 1;%we will at least look at 1+ block data may later require 2
+smval = 60; %temporal 1/2 width of gaussian smoothing filter
+smval_novrep = 250; %temporal 1/2 width of gaussian smoothing filter for image trials
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---import task and unit data---%%%
@@ -37,6 +41,10 @@ load([data_dir task_file(1:end-11) '-preprocessed.mat'],'data','cfg','valid_tria
 %grab unit data
 [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
     multiunit,unit_confidence,sorting_quality);
+if num_units == 0
+    return
+end
+
 clear unit_names
 
 
@@ -44,13 +52,14 @@ switch task
     case {'cvtnew','CVTNEW'}
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---import & reformat data so that spikes are locked to events---%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         num_trials = length(cfg.trl);
         
         %NaNs are for start and end trials otherwise cut
         valid_trials(1,isnan(valid_trials(1,:))) = 1;
         valid_trials(2,isnan(valid_trials(2,:))) = num_trials;
-            
+        
         
         disp('Aligning spike times to trial events')
         
@@ -59,7 +68,7 @@ switch task
         
         %CVTNEW variable trial length
         %time is + 300 ms
-        short = [700 1133]; %#ok %short duration trials 
+        short = [700 1133]; %#ok %short duration trials
         mediumm = [1134 1567];%#ok
         long = [1568 2200];%#ok cap should be 2000 but cortex can have some lag
         
@@ -67,7 +76,7 @@ switch task
         time_lock_firing = make_time_lock_cell(event_durs,num_units,num_trials,twin);
         trial_duration = cell(1,num_units);
         for unit = 1:num_units
-           trial_duration{unit} = NaN(1,num_trials); 
+            trial_duration{unit} = NaN(1,num_trials);
         end
         for t = 1:num_trials
             for unit = 1:num_units
@@ -81,26 +90,38 @@ switch task
                 end
             end
         end
-
+        
         %remove excess NaNs associated with error trials
         time_lock_firing = laundry(time_lock_firing);
+        trial_duration = laundry(trial_duration);
+        
         
         for unit = 1:size(time_lock_firing,2)
-            if size(time_lock_firing{4,unit},2) < 2500
-                diff = 2500-size(time_lock_firing{4,unit},2);
-                time_lock_firing{4,unit} = [time_lock_firing{4,unit}...
-                    NaN(size(time_lock_firing{4,unit},1),diff)];
+            if ~isempty(time_lock_firing{1,unit})
+                if size(time_lock_firing{4,unit},2) < 2500
+                    diff = 2500-size(time_lock_firing{4,unit},2);
+                    time_lock_firing{4,unit} = [time_lock_firing{4,unit}...
+                        NaN(size(time_lock_firing{4,unit},1),diff)];
+                end
             end
         end
         
-        trial_duration = laundry(trial_duration);
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Temporal analysis and signifance testing---%%%
-        disp('Determining if spikes are locked to trial events')
+        disp([task_file(1:end-11) ': Determining if spikes are locked to trial events'])
         Fs = data(1).fsample; %should be 1000
         
-        smval = 60; %temporal 1/2 width of gaussian smoothing filter
+        %---Calculate Peak firing rate for all epochs
+        peak_firing_rate = NaN(size(time_lock_firing));
+        for unit = 1:num_units
+            for event = 1:size(time_lock_firing,1)
+                if ~isempty(time_lock_firing{event,unit})
+                    [firing_rate,~]= nandens(time_lock_firing{event,unit},smval,'gauss',Fs,'nanflt');%nandens made by nathan killian
+                    peak_firing_rate(event,unit) = max(firing_rate);
+                end
+            end
+        end
         
         % Collect spikes per epoch to determine if neurons fire more within
         % a given epoch ignore the 1st twin as this is from the previous event
@@ -120,11 +141,19 @@ switch task
         % if neurons encode info about a particular time within an epoch
         for event = 1:size(time_lock_firing,1);
             for unit = 1:num_units
-                [temporal_info.rate(event,unit),temporal_info.shuffled_info_rate{event,unit}]...
-                    = estimated_mutual_information(time_lock_firing{event,unit},numshuffs,info_type,smval,Fs);
-                epoch_data.firing_rates{event,unit} = nansum(time_lock_firing{event,unit}(:,twin:end),2);
-                epoch_data.dur(event,unit) = (size(time_lock_firing{event,unit},2)-twin)/1000; %duration in seconds
-                epoch_data.num_trials(event,unit) = sum(~isnan(epoch_data.firing_rates{event,unit}));
+                if ~isempty(time_lock_firing{event,unit}) && any(peak_firing_rate(:,unit) > fr_threshold) %only processs active neurons
+                    [temporal_info.rate(event,unit),temporal_info.shuffled_info_rate{event,unit}]...
+                        = estimated_mutual_information(time_lock_firing{event,unit},numshuffs,info_type,smval,Fs);
+                    epoch_data.firing_rates{event,unit} = nansum(time_lock_firing{event,unit}(:,twin:end),2);
+                    epoch_data.dur(event,unit) = (size(time_lock_firing{event,unit},2)-twin)/1000; %duration in seconds
+                    epoch_data.num_trials(event,unit) = sum(~isnan(epoch_data.firing_rates{event,unit}));
+                else
+                    temporal_info.rate(event,unit) = NaN;
+                    temporal_info.shuffled_info_rate{event,unit} = NaN;
+                    epoch_data.firing_rates{event,unit} = nansum(time_lock_firing{event,unit}(:,twin:end),2);
+                    epoch_data.dur(event,unit) = (size(time_lock_firing{event,unit},2)-twin)/1000; %duration in seconds
+                    epoch_data.num_trials(event,unit) = sum(~isnan(epoch_data.firing_rates{event,unit}));
+                end
             end
         end
         
@@ -152,26 +181,83 @@ switch task
         unit_names.name = unit_stats(1,:);
         unit_names.multiunit = multiunit;
         task_data.task_type = task;
+        task_data.peak_firing_rate = peak_firing_rate;
         time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,temporal_info,task_data,unit_names,smval)
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Finally save all the data---%%%
         save([data_dir task_file(1:8) '-cvtnew-time_locked_results.mat'],...
-            'time_lock_firing','smval','temporal_info','epoch_data');
+            'time_lock_firing','smval','temporal_info','epoch_data','peak_firing_rate');
         disp(['Time Locked Data Analyis for ' task_file(1:8) ' saved']);
-                
+        
     case 'ListSQ'
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---import & reformat data so that spikes are locked to events---%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         num_trials = length(cfg.trl);
         
-        %NaNs are for start and end trials otherwise cut 
+        %NaNs are for start and end trials otherwise cut
         valid_trials(1,isnan(valid_trials(1,:))) = 1;
-        valid_trials(2,isnan(valid_trials(2,:))) = num_trials; 
-            
+        valid_trials(2,isnan(valid_trials(2,:))) = num_trials;
         
-        disp('Aligning spike times to trial events')
+        %---determine number of blocks unit was stable for
+        %remove units with too few trials
+        %these are the absolute minimum data required to do data analysis may want
+        %to be more strigent later but not worth doing analysis (especially
+        %shuffling) on such few trials for these neurons
+        if strcmpi(task,'cvtnew')
+            minimum_trials_1 = 100;
+            for unit = 1:num_units
+                start_end = valid_trials(:,unit);
+                if isnan(start_end(1))
+                    start_end(1) = 1;
+                end
+                if isnan(start_end(2))
+                    start_end(2) = length(cfg.trl);
+                end
+                start_end(start_end == 0) = 1;
+                min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
+                max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
+                if max_trial-min_trial < minimum_trials_1
+                    valid_trials(:,unit) = NaN;
+                end
+            end
+        else
+            if str2double(task_file(3:8)) < 140805 %7 second viewing with fewere sequence trials
+                minimum_trials_1 = 101; %for session start minimum number of trials: includes fam block and 16 novel/repeat images + sequence trials
+                minimum_trials_2 =  80;%for rest of session: includes 16 novel/repeat images + sequence trials
+            else
+                minimum_trials_1 = 117; %for session start minimum number of trials: includes fam block and 16 novel/repeat images + sequence trials
+                minimum_trials_2 =  96;%for rest of session: includes 16 novel/repeat images + sequence trials
+            end
+            for unit = 1:num_units
+                start_end = valid_trials(:,unit);
+                if isnan(start_end(1))
+                    start_end(1) = 1;
+                end
+                if isnan(start_end(2))
+                    start_end(2) = length(cfg.trl);
+                end
+                start_end(start_end == 0) = 1;
+                min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
+                max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
+                
+                if min_trial < 22 %includes fam block
+                    min_trial = 22; %remove then count from there
+                end
+                num_blks = floor((max_trial-min_trial+1)/minimum_trials_2);
+                
+                if num_blks < min_blks
+                    valid_trials(:,unit) = NaN;
+                end
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%---Collect Spike Times relative to events---%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        disp([task_file(1:8) ': aligning spike times to trial events'])
         
         %get important task specific information
         [itmlist,sequence_items,~] = read_ListSQ_itm_and_cnd_files(item_file,cnd_file);
@@ -234,26 +320,24 @@ switch task
             rmv = [];
             for img = 1:96
                 ind = find(which_images{unit} == img);
-                if length(ind) == 1 %so either novel or repeat but not both
+                if length(ind) == 1  %so either novel or repeat but not both
                     rmv = [rmv ind];
                 end
             end
-            for event = [16 17 20 21];
+            for event = [16 17 20 21]; %image trial related events
                 time_lock_firing{event,unit}(rmv,:) = [];
             end
             which_images{unit}(rmv) = [];
             nvr{unit}(rmv) = [];
         end
-
-
+        
+        
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Temporal analysis and signifance testing---%%%
-        disp('Determining if spikes are locked to trial events')
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        disp([task_file(1:8) ': determining if spikes are locked to trial events'])
         Fs = data(1).fsample; %should be 1000
-        
-        smval = 60; %temporal 1/2 width of gaussian smoothing filter
-        smval_novrep = 250; %temporal 1/2 width of gaussian smoothing filter for image trials
         
         %each sequence own condition + novel + repeat images + 2 for
         %combined across images and combined across sequences
@@ -269,15 +353,17 @@ switch task
         temporal_info.rate = NaN(size(time_lock_firing,1),num_units,max_conditions); %the observed information rate in bits/sec
         temporal_info.shuffled_info_rate = cell(size(time_lock_firing,1),num_units,max_conditions); %bootstrapped information rate in bits/sec expected by chance from spike train
         temporal_info.shuffled_95_percentile = NaN(size(time_lock_firing,1),num_units,max_conditions);
-           temporal_info.shuffled_90_percentile = NaN(size(time_lock_firing,1),num_units,max_conditions);
+        temporal_info.shuffled_90_percentile = NaN(size(time_lock_firing,1),num_units,max_conditions);
         info_type = 'temporal';
         
         %---Calculate Peak firing rate for all epochs
         peak_firing_rate = NaN(size(time_lock_firing));
         for unit = 1:num_units
             for event = 1:size(time_lock_firing,1)
-                [firing_rate,~]= nandens(time_lock_firing{event,unit},smval,'gauss',Fs,'nanflt');%nandens made by nathan killian
-                peak_firing_rate(event,unit) = max(firing_rate);
+                if ~isempty(time_lock_firing{event,unit})
+                    [firing_rate,~]= nandens(time_lock_firing{event,unit},smval,'gauss',Fs,'nanflt');%nandens made by nathan killian
+                    peak_firing_rate(event,unit) = prctile(firing_rate,99);
+                end
             end
         end
         
@@ -289,6 +375,11 @@ switch task
                     if event == 1 || event == 18 || event == 19 %break fixations not really broken into novel vs repeat
                         condition = 1; %so i don't have to change the format of the data
                         temp_time_lock = time_lock_firing{event,unit};
+                        
+                        if size(temp_time_lock,1) < 5
+                            continue
+                        end
+                        
                         [temporal_info.rate(event,unit,condition),temporal_info.shuffled_info_rate{event,unit,condition}]...
                             = estimated_mutual_information(temp_time_lock,numshuffs,info_type,smval_novrep,Fs);
                         
@@ -387,17 +478,19 @@ switch task
         task_data.task_type = 'ListSQ_Sequence';
         task_data.which_sequence = which_sequence;
         task_data.novel_vs_repeat = nvr;
-        time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,temporal_info,task_data,unit_names,smval)
+        time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,...
+            temporal_info,task_data,unit_names,smval,fr_threshold)
         task_data.task_type = 'ListSQ_List';
-        time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,temporal_info,task_data,unit_names,[smval,smval_novrep])
+        time_locked_plotsV2(figure_dir,task_file,time_lock_firing,epoch_data,...
+            temporal_info,task_data,unit_names,[smval,smval_novrep],fr_threshold)
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Finally save all the data---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        save([data_dir task_file(1:8) '-ListSQ-time_locked_results.mat'],'time_lock_firing',...
+        save([data_dir task_file(1:end-11) '-ListSQ-time_locked_results.mat'],'time_lock_firing',...
             'which_sequence','trial_type','smval','smval_novrep','temporal_info','epoch_data',...
             'unit_names','task_data','peak_firing_rate');
-        disp(['Time Locked Data Analyis for ' task_file(1:8) ' saved']);
+        disp(['Time Locked Data Analyis for ' task_file(1:end-11) ' saved']);
 end
 end
 
@@ -555,8 +648,8 @@ end
 if ~isempty(event_times{18}) %so there are some break fixations and refixations
     if length(event_times{18})-1 == length(event_times{19}) %occurs if the refixation is late in the trial
         event_times{18}(end) = [];
-    elseif length(event_times{19})-1 == length(event_times{18}) 
-       event_times{19}(end) = [];
+    elseif length(event_times{19})-1 == length(event_times{18})
+        event_times{19}(end) = [];
     elseif length(event_times{18})-1 > length(event_times{19})
         disp('error break fixations not matching refixations')
     end
@@ -588,25 +681,6 @@ for events = 1:length(event_times)
     end
 end
 end
-
-function event_times = get_Sequence_event_times(cfgtrl,event_codes,event_durs,trial_start)
-% function determines event times in a given trial
-event_times = cell(1,size(event_codes,2));
-for events = 1:length(event_times)
-    if events == 1 %this is the ITI period
-        event_times{events} = [cfgtrl.alltim(cfgtrl.allval == event_codes(events))...
-            cfgtrl.alltim(cfgtrl.allval == event_codes(events)+1)]-trial_start;
-        event_times{events}(event_times{events} > event_durs(events)) = event_durs(events);
-    elseif events == length(event_times)%reward period
-        temp_times = cfgtrl.alltim(cfgtrl.allval == event_codes(events))-trial_start;
-        event_times{events} = [temp_times(1) temp_times(end)];
-    else
-        temp_times = cfgtrl.alltim(cfgtrl.allval == event_codes(events))-trial_start;
-        event_times{events} = temp_times(1); %in case there are multiple events like refixating a item
-    end
-end
-end
-
 
 function [time_lock_firing,broke_row] = put_in_time_matrix(data,unit,t,event_times,time_lock_firing,twin,broke_row,event_names)
 % function finds spikes that are time locked to events

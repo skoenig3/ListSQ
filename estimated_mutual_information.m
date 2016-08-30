@@ -1,6 +1,6 @@
 function [observed_info_rate,shuffled_info_rate]= estimated_mutual_information(trial_data,numshuffs,info_type,smval,Fs)
 % written by Seth Konig August, 2014
-% estimates the "mutual information" rate (aka Skaggs Infomrmation) between 
+% estimates the "mutual information" rate (aka Skaggs Infomrmation) between
 % spikes and variable of interest. Further the function calculates the expected
 % mutual information for spikie trains rotated in time within a given trial.
 % Updated 1/12/16 by adding case 'spatial_noshuff' so can compute mutual
@@ -35,42 +35,62 @@ if ~isempty(trial_data)
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the observed mutual information rate---%%%
             total_time = sum(~isnan(trial_data)); %total number of time_points
+            ntrials = floor(size(trial_data,1)/2); %number of trials/2
             
             %probability of time being observed at a given point across all
             %trials, not necessarily the same
             p_x = total_time/sum(total_time);
             [lambda_x,~]= nandens(trial_data,smval,'gauss',Fs,'nanflt');%nandens made by nathan killian
             lambda = nansum(nansum(lambda_x.*p_x));
-            [observed_info_rate] = p_log_p(lambda,lambda_x,p_x);
+            [ observed_info_rate.skaggs] = p_log_p(lambda,lambda_x,p_x);
             
-            if observed_info_rate < 0
+            if observed_info_rate.skaggs < 0
                 error('Information should be greater than 0. WTF?')
             end
+            
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %%%---Calculate the observed temporal stability---%%%
+            [lambda_x1,~]= nandens(trial_data(1:ntrials,:),smval,'gauss',Fs,'nanflt');%firing rate curve for first half
+            [lambda_x2,~]= nandens(trial_data(ntrials+1:end,:),smval,'gauss',Fs,'nanflt');%firing rate curve for second half
+            observed_info_rate.temporalstability = corr2(lambda_x1,lambda_x2);
             
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the expected mutual information rate using bootstrapping---%%%
-            shuffled_info_rate = NaN(1,numshuffs);
-            if observed_info_rate ~= 0 %i.e. not zero firing rate or 100% uniform
-                for shuffled = 1:numshuffs;
+            
+            if observed_info_rate.skaggs ~= 0 %i.e. not zero firing rate or 100% uniform
+                skaggs = NaN(1,numshuffs);
+                temporalstability = NaN(1,numshuffs);
+                parfor shuffled = 1:numshuffs;
                     shuffled_firing = circshift_row(trial_data);
+                    
                     [lambda_x,~]= nandens(shuffled_firing,smval,'gauss',Fs,'nanflt');
                     lambda = nansum(nansum(lambda_x.*p_x));
-                    shuffled_info_rate(shuffled) = p_log_p(lambda,lambda_x,p_x);
-                     
-                    if shuffled_info_rate(shuffled) <= 0
+                    skaggs(shuffled) = p_log_p(lambda,lambda_x,p_x);
+                    
+                    if skaggs(shuffled) <= 0
                         disp('Error: Information should be greater than 0. WTF?')
                     end
+                    
+                    [lambda_x1,~]= nandens(shuffled_firing(1:ntrials,:),smval,'gauss',Fs,'nanflt');%firing rate curve for first half
+                    [lambda_x2,~]= nandens(shuffled_firing(ntrials+1:end,:),smval,'gauss',Fs,'nanflt');%firing rate curve for second half
+                    temporalstability(shuffled) = corr2(lambda_x1,lambda_x2);
                 end
+                shuffled_info_rate.skaggs = skaggs;
+                shuffled_info_rate.temporalstability =temporalstability;
+            else
+                shuffled_info_rate.skaggs = [];
+                shuffled_info_rate.temporalstability = [];
             end
             
         case 'spatial'
-                    
-            %get data and filtering parameters 
+            
+            %get data and filtering parameters
             eyepos = trial_data{1}; %eye position by trial odd rows x, even rows y
             spike_times = trial_data{2};%spike times aligned to image eye data by trial
             imageX = trial_data{3}(1);%horizontal size of the image
             imageY = trial_data{3}(2);%horizontal size of the image
+            min_bin_dur = trial_data{4}; %minimum amount of time in binned location to use
             
             binsize = smval(1); %number of pixels per spatial bin
             filter_width = smval(2); %std of 2D gaussian smoothing filter
@@ -80,10 +100,10 @@ if ~isempty(trial_data)
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the observed mutual information rate---%%%
             
-            [filtered_time] = get_smoothed_Time(eyepos,imageX,imageY,Fs,binsize,H);
-            filtered_time(filtered_time < 0.025) = NaN;
-            [filtered_space] = get_smoothed_Space(eyepos,spike_times,imageX,imageY,binsize,H);
-
+            [filtered_time] = filter_time(eyepos,imageX,imageY,Fs,binsize,H);
+            filtered_time(filtered_time < min_bin_dur) = NaN;
+            [filtered_space] = filter_space(eyepos,spike_times,imageX,imageY,binsize,H);
+            
             lambda_x = filtered_space./filtered_time; %observed firing rate over space
             p_x = filtered_time/nansum(nansum(filtered_time));
             lambda = nansum(nansum(lambda_x.*p_x));
@@ -98,32 +118,33 @@ if ~isempty(trial_data)
             %look at correlation between firing locations for first and 2nd half of data
             
             ntrials = floor(size(spike_times,1)/2);
-
+            
             %---get rate map for first half vs second half---%
             %first half
-            [filtered_time1] = get_smoothed_Time(eyepos(1:ntrials*2,:),...
-                imageX,imageY,Fs,binsize,H);
-            [filtered_space1] = get_smoothed_Space(eyepos(1:ntrials*2,:),...
-                spike_times(1:ntrials,:),imageX,imageY,binsize,H);      
+            filtered_time1 = filter_time(eyepos(1:ntrials*2,:),imageX,imageY,Fs,binsize,H);
+            filtered_time1(filtered_time1 < min_bin_dur) = NaN; 
+            filtered_space1 = filter_space(eyepos(1:ntrials*2,:),...
+                spike_times(1:ntrials,:),imageX,imageY,binsize,H);
             ratemap1 = filtered_space1./filtered_time1;
-            ratemap1(isnan(ratemap1)) = 0; 
+            ratemap1(isnan(ratemap1)) = 0;
             
             %second half
-            [filtered_time2] = get_smoothed_Time(eyepos(ntrials*2+1:ntrials*2*2,:),...
+            filtered_time2 = filter_time(eyepos(ntrials*2+1:ntrials*2*2,:),...
                 imageX,imageY,Fs,binsize,H);
-            [filtered_space2] = get_smoothed_Space(eyepos(ntrials*2+1:ntrials*2*2,:),...
+            filtered_time2(filtered_time2 < min_bin_dur) = NaN;
+            filtered_space2 = filter_space(eyepos(ntrials*2+1:ntrials*2*2,:),...
                 spike_times(ntrials+1:ntrials*2,:),imageX,imageY,binsize,H);
             ratemap2 = filtered_space2./filtered_time2;
-            ratemap2(isnan(ratemap2)) = 0; 
+            ratemap2(isnan(ratemap2)) = 0;
             
             observed_info_rate.spatialstability = corr2(ratemap1,ratemap2);
-          
+            
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the expected information rates and spatial stability using bootstrapping---%%%
-        
+            
             if observed_info_rate.skaggs ~= 0 %i.e. not zero firing rate or 100% uniform
-                    skaggs = NaN(1,numshuffs);
-                    spatialstability = NaN(1,numshuffs);
+                skaggs = NaN(1,numshuffs);
+                spatialstability = NaN(1,numshuffs);
                 parfor shuffled = 1:numshuffs;
                     
                     %previous method of shuffling data within trial
@@ -133,8 +154,8 @@ if ~isempty(trial_data)
                     
                     %---Calcualte Shuffled Mutual Information---%
                     %observed firing rate over space is the only thing changing
-                    [filtered_space] = get_smoothed_Space(eyepos,shuffled_firing,imageX,imageY,binsize,H);
-
+                    [filtered_space] = filter_space(eyepos,shuffled_firing,imageX,imageY,binsize,H);
+                    
                     lambda_x = filtered_space./filtered_time;
                     lambda = nansum(nansum(lambda_x.*p_x));
                     skaggs(shuffled) = nansum(p_log_p(lambda,lambda_x,p_x));
@@ -143,17 +164,17 @@ if ~isempty(trial_data)
                     end
                     
                     %---Calcualte Shuffled Spatial Stability---%
-                    [filtered_space1] = get_smoothed_Space(eyepos(1:ntrials*2,:),...
+                    [filtered_space1] = filter_space(eyepos(1:ntrials*2,:),...
                         shuffled_firing(1:ntrials,:),imageX,imageY,binsize,H);
                     ratemap1 = filtered_space1./filtered_time1;
                     ratemap1(isnan(ratemap1)) = 0;
                     
-                    [filtered_space2] = get_smoothed_Space(eyepos(ntrials*2+1:ntrials*2*2,:),...
+                    [filtered_space2] = filter_space(eyepos(ntrials*2+1:ntrials*2*2,:),...
                         shuffled_firing(ntrials+1:ntrials*2,:),imageX,imageY,binsize,H);
                     ratemap2 = filtered_space2./filtered_time2;
                     ratemap2(isnan(ratemap2)) = 0;
                     
-                   spatialstability(shuffled) = corr2(ratemap1,ratemap2);
+                    spatialstability(shuffled) = corr2(ratemap1,ratemap2);
                 end
                 shuffled_info_rate.skaggs = skaggs;
                 shuffled_info_rate.spatialstability = spatialstability;
@@ -163,10 +184,10 @@ if ~isempty(trial_data)
             end
             
             
-          case 'spatial_cvtnew' %special case since rotating spike train is not
-              %an effective measure due correlation in dot position over time
-                    
-            %get data and filtering parameters 
+        case 'spatial_cvtnew' %special case since rotating spike train is not
+            %an effective measure due correlation in dot position over time
+            
+            %get data and filtering parameters
             eyepos = trial_data{1}; %eye position by trial odd rows x, even rows y
             spike_times = trial_data{2};%spike times aligned to image eye data by trial
             imageX = trial_data{3}(1);%horizontal size of the image
@@ -180,9 +201,9 @@ if ~isempty(trial_data)
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the observed mutual information rate---%%%
             
-            [filtered_time] = get_smoothed_Time(eyepos,imageX,imageY,Fs,binsize,H);
-            [filtered_space] = get_smoothed_Space(eyepos,spike_times,imageX,imageY,binsize,H);
-
+            filtered_time = filter_time(eyepos,imageX,imageY,Fs,binsize,H);
+            filtered_space = filter_space(eyepos,spike_times,imageX,imageY,binsize,H);
+            
             lambda_x = filtered_space./filtered_time; %observed firing rate over space
             p_x = filtered_time/nansum(nansum(filtered_time));
             lambda = nansum(nansum(lambda_x.*p_x));
@@ -197,26 +218,26 @@ if ~isempty(trial_data)
             %look at correlation between firing locations for first and 2nd half of data
             
             ntrials = floor(size(spike_times,1)/2);
-
+            
             %---get rate map for first half vs second half---%
             %first half
-            [filtered_time1] = get_smoothed_Time(eyepos(1:ntrials*2,:),...
+            [filtered_time1] = filter_time(eyepos(1:ntrials*2,:),...
                 imageX,imageY,Fs,binsize,H);
-            [filtered_space1] = get_smoothed_Space(eyepos(1:ntrials*2,:),...
-                spike_times(1:ntrials,:),imageX,imageY,binsize,H);      
+            [filtered_space1] = filter_space(eyepos(1:ntrials*2,:),...
+                spike_times(1:ntrials,:),imageX,imageY,binsize,H);
             ratemap1 = filtered_space1./filtered_time1;
-            ratemap1(isnan(ratemap1)) = 0; 
+            ratemap1(isnan(ratemap1)) = 0;
             
             %second half
-            [filtered_time2] = get_smoothed_Time(eyepos(ntrials*2+1:ntrials*2*2,:),...
+            [filtered_time2] = filter_time(eyepos(ntrials*2+1:ntrials*2*2,:),...
                 imageX,imageY,Fs,binsize,H);
-            [filtered_space2] = get_smoothed_Space(eyepos(ntrials*2+1:ntrials*2*2,:),...
+            [filtered_space2] = filter_space(eyepos(ntrials*2+1:ntrials*2*2,:),...
                 spike_times(ntrials+1:ntrials*2,:),imageX,imageY,binsize,H);
             ratemap2 = filtered_space2./filtered_time2;
-            ratemap2(isnan(ratemap2)) = 0; 
+            ratemap2(isnan(ratemap2)) = 0;
             
             observed_info_rate.spatialstability = corr2(ratemap1,ratemap2);
-          
+            
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the expected information rates and spatial stability using bootstrapping---%%%
             shuffled_info_rate.skaggs = NaN(1,numshuffs);
@@ -231,8 +252,8 @@ if ~isempty(trial_data)
                     
                     %---Calcualte Shuffled Mutual Information---%
                     %observed firing rate over space is the only thing changing
-                    [filtered_space] = get_smoothed_Space(eyepos,shuffled_firing,imageX,imageY,binsize,H);
-
+                    [filtered_space] = filter_space(eyepos,shuffled_firing,imageX,imageY,binsize,H);
+                    
                     lambda_x = filtered_space./filtered_time;
                     lambda = nansum(nansum(lambda_x.*p_x));
                     shuffled_info_rate.skaggs(shuffled) = nansum(p_log_p(lambda,lambda_x,p_x));
@@ -241,12 +262,12 @@ if ~isempty(trial_data)
                     end
                     
                     %---Calcualte Shuffled Spatial Stability---%
-                    [filtered_space1] = get_smoothed_Space(eyepos(1:ntrials*2,:),...
+                    [filtered_space1] = filter_space(eyepos(1:ntrials*2,:),...
                         shuffled_firing(1:ntrials,:),imageX,imageY,binsize,H);
                     ratemap1 = filtered_space1./filtered_time1;
                     ratemap1(isnan(ratemap1)) = 0;
                     
-                    [filtered_space2] = get_smoothed_Space(eyepos(ntrials*2+1:ntrials*2*2,:),...
+                    [filtered_space2] = filter_space(eyepos(ntrials*2+1:ntrials*2*2,:),...
                         shuffled_firing(ntrials+1:ntrials*2,:),imageX,imageY,binsize,H);
                     ratemap2 = filtered_space2./filtered_time2;
                     ratemap2(isnan(ratemap2)) = 0;
@@ -256,43 +277,61 @@ if ~isempty(trial_data)
             end
             
         case 'spatial_noshuff'
-            %same as above without the shuffling
+            shuffled_info_rate = [];
+            
+            %get data and filtering parameters
             eyepos = trial_data{1}; %eye position by trial odd rows x, even rows y
             spike_times = trial_data{2};%spike times aligned to image eye data by trial
             imageX = trial_data{3}(1);%horizontal size of the image
             imageY = trial_data{3}(2);%horizontal size of the image
+            min_bin_dur = trial_data{4}; %minimum amount of time in binned location to use
             
-            binsize = smval(1); %number of pixels per spatial bing
+            binsize = smval(1); %number of pixels per spatial bin
             filter_width = smval(2); %std of 2D gaussian smoothing filter
-            H = fspecial('gaussian',[filter_width*10+5 filter_width*10+5],filter_width);
-            
-            %calculate the total time spent at any locaitons in binned pixels
-            spatial_time = time_per_pixel(eyepos,imageX,imageY,Fs);
-            filtered_time = bin2(spatial_time,binsize,binsize);
-            filtered_time = imfilter(filtered_time,H);
-            filtered_time(filtered_time < 0.001) = NaN;
-            filtered_time = filtered_time(end:-1:1,:); %flip so rightside up
-            
-            %caluclate total spikes over space
-            [firing_location] = pixel_spike_location(eyepos,spike_times,imageX,imageY);
-            filtered_space = bin2(firing_location,binsize,binsize);
-            filtered_space = imfilter(filtered_space,H);
-            filtered_space(filtered_space == 0) = NaN;
-            filtered_space = filtered_space(end:-1:1,:); %flip so rightside up
+            filter_size = filter_width*10;
+            H = fspecial('gaussian',filter_size,filter_width);
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the observed mutual information rate---%%%
+            filtered_time = filter_time(eyepos,imageX,imageY,Fs,binsize,H);
+            filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
+            filtered_space = filter_space(eyepos,spike_times,imageX,imageY,binsize,H);
             lambda_x = filtered_space./filtered_time; %observed firing rate over space
             p_x = filtered_time/nansum(nansum(filtered_time));
             lambda = nansum(nansum(lambda_x.*p_x));
-            [observed_info_rate] = sum(p_log_p(lambda,lambda_x,p_x));
+            [observed_info_rate.skaggs] = sum(p_log_p(lambda,lambda_x,p_x));
             
-            if observed_info_rate < 0
+            if observed_info_rate.skaggs < 0
                 error('Information should be greater than 0. WTF?')
             end
             
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %%%---Calculate the observed spatial stability---%%%
+            %look at correlation between firing locations for first and 2nd half of data
             
-            shuffled_info_rate = []; 
+            ntrials = floor(size(spike_times,1)/2);
+            
+            %---get rate map for first half vs second half---%
+            %first half
+            filtered_time1 = filter_time(eyepos(1:ntrials*2,:),imageX,imageY,Fs,binsize,H);
+            filtered_time1(filtered_time1 < min_bin_dur) = NaN; 
+            filtered_space1 = filter_space(eyepos(1:ntrials*2,:),...
+                spike_times(1:ntrials,:),imageX,imageY,binsize,H);
+            ratemap1 = filtered_space1./filtered_time1;
+            ratemap1(isnan(ratemap1)) = 0;
+            
+            %second half
+            filtered_time2 = filter_time(eyepos(ntrials*2+1:ntrials*2*2,:),...
+                imageX,imageY,Fs,binsize,H);
+            filtered_time2(filtered_time2 < min_bin_dur) = NaN;
+            filtered_space2 = filter_space(eyepos(ntrials*2+1:ntrials*2*2,:),...
+                spike_times(ntrials+1:ntrials*2,:),imageX,imageY,binsize,H);
+            ratemap2 = filtered_space2./filtered_time2;
+            ratemap2(isnan(ratemap2)) = 0;
+            
+            observed_info_rate.spatialstability = corr2(ratemap1,ratemap2);
+            
+            
             
     end
 else
@@ -305,23 +344,4 @@ function [info] = p_log_p(lambda,lambda_x,p_x)
 %mutual info equation
 plogp = lambda_x.*log2(lambda_x/lambda);
 info = nansum(plogp.*p_x);
-end
-
-function [filtered_time] = get_smoothed_Time(eyepos,imageX,imageY,Fs,binsize,H)
-
-%calculate the total time spent at any locaitons in binned pixels
-spatial_time = time_per_pixel(eyepos,imageX,imageY,Fs);
-filtered_time = bin2(spatial_time,binsize,binsize);
-filtered_time = imfilter(filtered_time,H);
-filtered_time(filtered_time < 0.001) = NaN;
-filtered_time = filtered_time(end:-1:1,:); %flip so rightside up
-end
-
-function [filtered_space] = get_smoothed_Space(eyepos,spike_times,imageX,imageY,binsize,H)
-%caluclate total spikes over space
-[firing_location] = pixel_spike_location(eyepos,spike_times,imageX,imageY);
-filtered_space = bin2(firing_location,binsize,binsize);
-filtered_space = imfilter(filtered_space,H);
-filtered_space(filtered_space == 0) = NaN;
-filtered_space = filtered_space(end:-1:1,:); %flip so rightside up
 end
