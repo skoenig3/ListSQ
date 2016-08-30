@@ -24,9 +24,9 @@ ys(ys > 600)= 600;
 
 xys = sub2ind(size(threshold_matrix),ys,xs);
 
-
-xs(threshold_matrix(xys) == 1) = [];
-ys(threshold_matrix(xys) == 1) = [];
+threshold_matrix = threshold_matrix(end:-1:1,:);
+xs(threshold_matrix(xys) == 0) = [];
+ys(threshold_matrix(xys) == 0) = [];
 
 xs = xs+randi(jitter,length(xs),1);
 ys = ys+randi(jitter,length(ys),1);
@@ -34,7 +34,7 @@ ys = ys+randi(jitter,length(ys),1);
 subplot(src(1),src(2),subnum)
 hold on
 plot(x',y','color',[0.8 0.8 0.8])
-plot(xs,ys,'.r')
+plot(xs,ys,'.r','markersize',4)
 hold off
 set(gca,'Xtick',[]);
 set(gca,'Ytick',[]);
