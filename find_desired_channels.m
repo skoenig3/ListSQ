@@ -1,5 +1,5 @@
 function [desired_channels] = find_desired_channels(cfg,channel_type)
-% written by Seth K?nig August 19, 2014
+% written by Seth Konig August 19, 2014
 % determine which channel corresponds to the indeces in the data stucture
 % array.
 %
@@ -7,11 +7,12 @@ function [desired_channels] = find_desired_channels(cfg,channel_type)
 %   1) cfg: configuration and data file data
 %   3) channel_type: which type of channel are you looking for i.e. units,
 %   LFPs, or eye [data]
+%
+% updated 10/29/15; input was hdr, data,channel_type
+% Code rechecked for bugs October 17, 2016 SDK
 
-% for loop is actually faster here than reformating from structs to cells
-% to mats
 
-%updated 10/29/15; input was hdr, data,channel_type
+% find_desired_channels
 mychannels = cfg.channel;
 % mychannels = cell(1,length(data));
 % for chan = 1:length(data)

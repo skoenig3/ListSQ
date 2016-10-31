@@ -1,7 +1,8 @@
 function [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,...
     sorting_quality,waveform_count,lfp_quality,comments] = get_task_data(session_data,task)
-%function grabs desired task data
-
+%function grabs desired task data from session_data from excel recording notes
+%
+% Code rechecked for bugs October 17, 2016 SDK
 task_file = [];
 item_file = [];
 cnd_file = [];
@@ -55,4 +56,3 @@ elseif isfield(session_data,'task2')
 else
     warning('Could not identify the proper tasks, exiting function')
 end
-

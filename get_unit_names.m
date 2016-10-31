@@ -22,6 +22,8 @@ function [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_nam
 %       b) row 2: unit confidence
 %       c) row 3: sorting_quality
 %   3) num_units: number of units in data file
+%
+% Code rechecked for bugs October 17, 2016 SDK
 
 unit_channels = find_desired_channels(cfg,'sig');
 num_units = length(unit_channels);
@@ -32,7 +34,7 @@ end
 unit_stats = cell(4,num_units);
 mu = NaN(1,num_units);
 for unit = 1:num_units
-    unit_stats{1,unit} = hdr.label{data(unit).whichchannel};
+    unit_stats{1,unit} = hdr.label{data(unit).whichchannel}; %units are always first in data structure
     for n = 1:length(unit_names)
         if strcmpi(unit_stats{1,unit},strtrim(unit_names{n}))
             if  multiunit(n) > 3 %likley single unit
@@ -47,7 +49,7 @@ for unit = 1:num_units
         end
     end
 end
-if any(any(cellfun(@isempty,unit_stats)))
-    warning('No unit found!!! Unit data may not have been not imported correctly!!!')
-end
+% if any(any(cellfun(@isempty,unit_stats))) %happens when have 0 spike count
+%     warning('No unit found!!! Unit data may not have been not imported correctly!!!')
+% end
 multiunit = mu;

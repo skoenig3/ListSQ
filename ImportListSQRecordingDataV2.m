@@ -12,6 +12,8 @@ function ImportListSQRecordingDataV2(data_dir,figure_dir,session_data)
 %   3) figure_dir: folder for saving figures
 % Outputs:
 %   1) saves preprocessed data to data_dir
+%
+% Code rechecked for bugs August, 2016
 
 figure_dir = [figure_dir '\Calibration\'];
 

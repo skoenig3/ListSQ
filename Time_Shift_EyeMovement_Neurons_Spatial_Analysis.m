@@ -16,13 +16,12 @@ Fs = 1000;%Hz
 smval = 60;
 imageX = 800;
 imageY = 600;
-min_shift_dur = 40; % ms intervals relative to fixation peak 250/8
+min_shift_dur = 30; % ms intervals relative to fixation peak 250/8
 
 binsize = 12; %pixels per bin spatial bin in either dimension 1/2 dva
-filter_width = 4; %std of 2D guassian filter ~ 2 dva
+filter_width = 6; %std of 2D guassian filter ~ 3 dva
 filter_size = filter_width*10;
 H = fspecial('gaussian',filter_size,filter_width);
-min_bin_dur = 0.020; %minimum of 20 ms in each bin to use so no outliers/edge artifacts
 %10 ms seems too low and 100 ms may be a little high
 
 min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
@@ -40,6 +39,7 @@ total_cells = 0;
 
 figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Population Figures\Spatial Eye Movement Time Shift\';
 figure_dir2 = [figure_dir 'New Place Cells\'];
+
 for monkey = 2:-1:1
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
@@ -68,7 +68,7 @@ for monkey = 2:-1:1
         session_data(end) = [];%last file doesn't have strobe signal working so have no timing singnal :(
     end
     
-    for session = 1:length(session_data)
+    for session = 42:length(session_data)
         [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,~]=...
             get_task_data(session_data{session},task);
         if isempty(task_file)
@@ -85,20 +85,17 @@ for monkey = 2:-1:1
         if exist([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat'],'file') %want to remove later
             load([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat']);
             load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat']);
-            filter_size = filter_width*10;
-            H = fspecial('gaussian',filter_size,filter_width);
         else
             continue
         end
         
         for unit = 1:num_units
             if ~isempty(spike_times{unit})
-                if ((spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.shuffled_spatialstability_prctile(unit) < 95))
-                    %want units that didn't pass both criterion before.
-                    if ((fixation_info.rate(unit) >  fixation_info_95.rate(unit)) &&  (saccade_info.rate(unit) >  saccade_info_95.rate(unit)))...
-                            || ((fixation_info2.rate(unit) >  fixation_info2_95.rate(unit)) &&  (saccade_info2.rate(unit) >  saccade_info2_95.rate(unit)))
-                        %want units that are clearly eye movement modulated
-
+                 if (spatial_info.shuffled_rate_prctile(unit) > 95) ... %skagg 95%+
+                && (spatial_info.spatialstability_even_odd_prctile(2,unit) > 95) ... %spatial consistency
+                && (spatial_info.spatialstability_halves_prctile(2,unit) > 95) %spatial stability
+                    if temporal_info.fixation.shuffled_temporalstability_prctile(1,unit) > 95 ... %1st 2nd half corr
+                        col = 1;
                     else
                         continue;
                     end
@@ -119,13 +116,13 @@ for monkey = 2:-1:1
                     make_spike_jittered_colored_plot(eyepos{unit},spike_times{unit},[4 5],6)
                     set(gca,'Xcolor','w')
                     set(gca,'Ycolor','w')
-                    title(sprintf(['r = ' num2str(spatial_info.spatialstability(unit),2) ' ' ...
-                        num2str(spatial_info.shuffled_spatialstability_prctile(unit),2) '%%']))
+                    title(sprintf([    '\\rho_{1/2} = ' num2str(spatial_info.spatialstability_halves(1,unit),2) ...
+                    ' ' num2str(spatial_info.spatialstability_halves_prctile(1,unit),3) '%%']))
                     
                     subplot(4,5,11)
                     %Calculated smoothed firing rate for all images
                     filtered_time = filter_time(eyepos{unit},imageX,imageY,Fs,binsize,H);
-                    filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
+                    filtered_time(filtered_time == 0) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
                     filtered_space = filter_space(eyepos{unit},spike_times{unit},imageX,imageY,binsize,H);
                     firing_rate = filtered_space./filtered_time;
                     
@@ -143,33 +140,33 @@ for monkey = 2:-1:1
                     colormap('jet')
                     
                     title(sprintf(['max FR = ' num2str(max(fr),3) ...
-                        ' Hz \n Bit: ' num2str(spatial_info.shuffled_rate_prctile(unit),3) '%%,'...
-                        ' r = ' num2str(spatial_info.spatialstability(unit),2) ' ' ...
-                        num2str(spatial_info.shuffled_spatialstability_prctile(unit),2) '%%']))
+                        ' Hz \n Bit: ' num2str(spatial_info.shuffled_rate_prctile(unit),3) '%%']))
+                   
                     
-                    
+                    t = -twin1:twin2-1;
                     subplot(4,5,16)
                     hold on
                     % [yfix,~]= nandens(fixation_firing,smval,'gauss',Fs,'nanflt');
                     % [ysac,~]= nandens(saccade_firing,smval,'gauss',Fs,'nanflt');
                     [~,~,~,yfix,~] = dofill(t,fixation_firing,'blue',1,smval);
-                    [~,~,~,ysac,~] = dofill(t,saccade_firing,'red',1,smval);
-                    ylim([0.8*min([yfix ysac]),1.2*max([yfix ysac])]);
+%                     [~,~,~,ysac,~] = dofill(t,saccade_firing,'red',1,smval);
+%                     ylim([0.8*min([yfix ysac]),1.2*max([yfix ysac])]);
                     yl = ylim;
                     plot([0 0],[yl(1) yl(2)],'k--')
                     hold off
-                    xlabel('Time from Eye Movement')
+                    xlabel('Time from Fixation (ms)')
                     ylabel('FR (Hz)')
+                    xlim([-twin1 twin2])
                     %legend('+Fixations','+Saccades')
 
                     
                     %find max modulation time so take abs
-                    [~,fix_delay] = max(yfix(400:800));
-                    [~,sac_delay] = max(yfix(400:800));
-                    shift_dur = fix_delay-sac_delay; %pic shift relative to difference in fix and sac peaks s
-                    if shift_dur < min_shift_dur
-                        shift_dur = min_shift_dur;
-                    end
+                    [~,fix_delay] = min(yfix);
+%                     shift_dur = fix_delay-sac_delay; %pic shift relative to difference in fix and sac peaks s
+%                     if shift_dur < min_shift_dur
+%                         shift_dur = min_shift_dur;
+%                     end
+                    shift_dur = min_shift_dur;
                     fix_delay = fix_delay-100;
                     
                     shifts = fix_delay-3*shift_dur:shift_dur:fix_delay+3*shift_dur;
@@ -188,14 +185,13 @@ for monkey = 2:-1:1
                         set(gca,'Ycolor','w')
                         
                         filtered_time = filter_time(shift_eye,imageX,imageY,Fs,binsize,H);
-                        filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
+                        filtered_time(filtered_time == 0) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
                         filtered_space = filter_space(shift_eye,spike_times{unit},imageX,imageY,binsize,H);
                         firing_rate = filtered_space./filtered_time;
                         
                         trial_data{1} = shift_eye;
                         trial_data{2} = spike_times{unit};
                         trial_data{3} = [imageX,imageY];
-                        trial_data{4} = min_bin_dur;
                         spatial_smval = [binsize filter_width];
                         [spatial_shift_info,~] = estimated_mutual_information(trial_data,1,'spatial_noshuff',spatial_smval,Fs);
                         
@@ -219,7 +215,7 @@ for monkey = 2:-1:1
                     bar(1,spatial_info.rate(unit),'r')
                     bar(2:8,shift_bits)
                     plot([0 8],[bit_95 bit_95],'k--')
-                    plot([0 8],[bit_99 bit_99],'k--')
+%                     plot([0 8],[bit_99 bit_99],'k--')
                     hold off
                     xlabel('Shift (ms)')
                     ylabel('Skaggs (bits)')
@@ -227,14 +223,14 @@ for monkey = 2:-1:1
                     set(gca,'XtickLabel',[{'None'} num2cell(shifts) ])
                     set(gca,'XTickLabelRotation',45)
                     
-                    corr_95 = prctile(spatial_info.shuffled_spatialstability{unit},95);
-                    corr_99 = prctile(spatial_info.shuffled_spatialstability{unit},99);
+                    corr_95 = prctile(spatial_info.shuffled_spatialstability_halves{unit}(1,:),95);
+                    corr_99 = prctile(spatial_info.shuffled_spatialstability_halves{unit}(1,:),99);
                     subplot(4,5,20)
                     hold on
-                    bar(1,spatial_info.spatialstability(unit),'r')
+                    bar(1,spatial_info.spatialstability_halves(1,unit),'r')
                     bar(2:8,shift_corrs)
                     plot([0 8],[corr_95 corr_95],'k--')
-                    plot([0 8],[corr_99 corr_99],'k--')
+%                     plot([0 8],[corr_99 corr_99],'k--')
                     hold off
                     xlabel('Shift (ms)')
                     ylabel('Spatial corr')
@@ -250,7 +246,7 @@ for monkey = 2:-1:1
                     subtitle(['Spatial Plots' multi_str unit_names{unit}]);
                     
                     total_cells = total_cells+1;
-                    if any((shift_corrs > corr_95) & (shift_bits > bit_95))
+%                     if any((shift_corrs > corr_95) & (shift_bits > bit_95))
                         [~,best] = max(shift_corrs);%correlation more conservative than Skagg's score
                         best_delay = [best_delay shifts(best)];
                         fix_delays = [fix_delays fix_delay];
@@ -263,10 +259,10 @@ for monkey = 2:-1:1
                         plot([shifts(best) shifts(best)],[yl(1) yl(2)],'r--')
                         hold off
                         
-                        save_and_close_fig(figure_dir2,[task_file(1:end-11) '-' unit_names{unit} '_Place_Cell_TimeShift'])
-                    else
-                        save_and_close_fig(figure_dir,[task_file(1:end-11) '-' unit_names{unit} '_Place_Cell_TimeShift'])
-                    end
+%                         save_and_close_fig(figure_dir2,[task_file(1:end-11) '-' unit_names{unit} '_Place_Cell_TimeShift'])
+%                     else
+%                         save_and_close_fig(figure_dir,[task_file(1:end-11) '-' unit_names{unit} '_Place_Cell_TimeShift'])
+%                     end
                 end
             end
         end

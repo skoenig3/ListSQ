@@ -6,7 +6,8 @@ task = 'ListSQ';
 
 locations = [2:17];
 all_unit_positions = zeros(1,length(locations));
-view_cell_poisitions = zeros(1,length(locations));
+place_cell_positions = zeros(1,length(locations));
+all_peak_firing_rates = [];
 for monk = 1:2
     monkey = monkeys{monk};
     
@@ -54,6 +55,10 @@ for monk = 1:2
         [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
             multiunit,unit_confidence,sorting_quality);
         
+        if num_units == 0
+            continue
+        end
+        
         load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],...
             'spatial_info','peak_firing_rate')
         
@@ -70,79 +75,36 @@ for monk = 1:2
         
         
         for unit = 1:size(valid_trials,2)
-            %unstable/usable units
-            if stability_attribute(unit) ~=  1 %not used unit
-                if any(~isnan(peak_firing_rate(:,unit)))
-                    error('Unit was stable and should have been processed')
-                end
-                continue %move to the next unit
-            end
             
             %usable units
-            if multiunit(unit) ==1 %then multiunit and don't want
-                peak_firing_rate(:,unit) = NaN;
-                spatial_info.shuffled_rate_prctile(:,unit) = NaN;
-                spatial_info.shuffled_spatialstability_prctile(:,unit) = NaN;
+            if multiunit(unit) ==1 
                 continue
             end
             
-
-            if any(isnan(spatial_info.rate(:,unit)) & peak_firing_rate(:,unit) > 1)
-                error('Firing rate for unit is > 1 Hz but not processed')
+            if isnan(spatial_info.rate(unit)) || spatial_info.rate(unit) == 0 %didn't run on unit since not stable
+                continue
             end
             
-            %---determine number of blocks unit was stable for
-            start_end = valid_trials(:,unit);
-            if isnan(start_end(1))
-                start_end(1) = 1;
+            AP_location = round(chamber_zero(1)+ session_data{sess}.location(1));
+            location_index = find(locations == AP_location);
+            if spatial_info.shuffled_rate_prctile(unit) > 99  %%&& spatial_info.shuffled_spatialstability_prctile(unit) > 95
+                all_peak_firing_rates = [all_peak_firing_rates peak_firing_rate(3,unit)];
+                place_cell_positions(location_index) = place_cell_positions(location_index)+1;
             end
-            if isnan(start_end(2))
-                start_end(2) = length(cfg.trl);
-            end
-            start_end(start_end == 0) = 1;
-            min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
-            max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
-            
-            if max_trial < minimum_trials_1
-                error('Unit should have been stable for more trials to be processed')
-            end
-            
-            if min_trial < 22 %includes fam block
-                min_trial = 22; %remove then count from there
-            end
-            num_blks = floor((max_trial-min_trial+1)/minimum_trials_2);
-            
-            if num_blks < 2 %remove from count
-                peak_firing_rate(:,unit) = NaN;
-                spatial_info.shuffled_rate_prctile(:,unit) = NaN;
-                spatial_info.shuffled_spatialstability_prctile(:,unit) = NaN;
-            end
-            
+            all_unit_positions(location_index) = all_unit_positions(location_index)+1;            
         end
-        
-        total_units = sum(sum(~isnan(peak_firing_rate)) > 0);
-        if total_units == 0
-            continue
-        end
-        total_spatial_units = sum(sum((spatial_info.shuffled_rate_prctile > 95) & (spatial_info.shuffled_spatialstability_prctile > 95)) > 0);
-        AP_location = round(chamber_zero(1)+ session_data{sess}.location(1));
-        location_index = find(locations == AP_location);
-        
-        all_unit_positions(location_index) = all_unit_positions(location_index)+total_units;
-        view_cell_poisitions(location_index) = view_cell_poisitions(location_index)+total_spatial_units;
-        
     end
 end
 %%
 half_threshold = 10.5;
-prop = view_cell_poisitions./all_unit_positions;
+prop = place_cell_positions./all_unit_positions;
 prop_posterior = nanmean(prop(locations < half_threshold));
 prop_anterior =  nanmean(prop(locations > half_threshold));
 
 figure
 bar(prop)
 hold on
-plot([9.5 9.5],[0 0.5],'k--')
+plot([half_threshold half_threshold],[0 0.5],'k--')
 hold off
 xlabel('AP Recording Location')
 ylabel('Proportion of Units that are view cells')

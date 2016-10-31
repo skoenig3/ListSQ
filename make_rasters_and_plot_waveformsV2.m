@@ -15,9 +15,10 @@ function make_rasters_and_plot_waveformsV2(data_dir,figure_dir,session_data,task
 % b) don't have enough spikes, and c) aren't stable for long enough to do
 % any analysis with sufficient confidence. But should plot the rasters
 % nevertheless.
+%!!!WARNING CODE WILL SET VIABLE TRILAS TO NULL FOR THESE UNITS TO SAVE PROCESSING TIME!!!!
 %
-% !!!WARNING CODE WILL SET VIABLE TRILAS TO NULL FOR THESE UNITS TO SAVE PROCESSING TIME!!!!
-%
+% Code rechecked for bugs August, 2016
+
 figure_dir = [figure_dir 'Rasters\'];
 too_few_folder = [figure_dir '\Rasters Too Few Trials or Spikes\']; %where to put rasters see line 47
 PoorIsolationFolder = [figure_dir '\PoorIsolation\']; %where to put poorly isolated units

@@ -8,7 +8,7 @@ jitter = 12; %1/2 dva
 x = position(1:2:end,:);
 y = position(2:2:end,:);
 
-[trial,time] = find(spike_times);
+[trial,time] = find(spike_times == 1);
 spikeind = sub2ind(size(x),trial,time);
 
 xs = x(spikeind);

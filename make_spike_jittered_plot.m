@@ -1,7 +1,10 @@
 function make_spike_jittered_plot(position,spike_times,src,subnum)
 %src: subplot row and subplot col
 %subnum: subplot number
-jitter = 12; %1/2 dva
+%
+% rechecked for bugs October 19, 2016 SDK
+
+jitter = 12; %1/2 dva for spike locations
 
 x = position(1:2:end,:);
 y = position(2:2:end,:);

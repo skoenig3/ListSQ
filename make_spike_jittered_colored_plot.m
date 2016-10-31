@@ -2,9 +2,12 @@ function make_spike_jittered_colored_plot(position,spike_times,src,subnum)
 % make jittered spike plot but color codes by "time"
 %src: subplot row and subplot col
 %subnum: subplot number
-jitter = 12; %1/2 dva
+%
+% rechecked for bugs October 19, 2016 SDK
 
-clrs = ['rgbm'];
+jitter = 12; %1/2 dva for spike locations
+
+clrs = ['rb']; %gm want first vs second half
 
 x = position(1:2:end,:);
 y = position(2:2:end,:);

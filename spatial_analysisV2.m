@@ -13,22 +13,20 @@ function spatial_analysisV2(data_dir,figure_dir,session_data,task)
 % Outputs:
 %   1) Saves figures to figure_dir
 %   2) Saves processed data to data_dir tagged with '-spatial_analysis_results.mat'
+%
+% Code rechecked ListSQ section for bugs October 17-18, 2016 SDK
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Set important task parameters---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-twin = 500;% here how much after image onset to ignore data
-numshuffs = 1000; % # of shuffles for bootstraspping, recommend this is between 100 & 1000
-fr_threshold = 1; %peak rate must be greater than 1 Hz to process. Don't want to waste processing/shuffling time on "silent neurons"
+image_on_twin = 500;%how much time to ignore eye movements for to remove
+%strong visual response (though some may last longer) combined with strong central bias
 
+numshuffs = 1000;% # of shuffles for bootstraspping, recommend this is at least 1000
 binsize = 12; %pixels per bin spatial bin in either dimension 1/2 dva
-filter_width = 4; %std of 2D guassian filter ~ 2 dva
-filter_size = filter_width*10;
-H = fspecial('gaussian',filter_size,filter_width);
-min_bin_dur = 0.050; %minimum of 50 ms in each bin to use so no outliers/edge artifacts
-%10 ms seems too low and 100 ms may be a little high
-
-min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
+filter_width = 6; %std of 2D guassian filter ~ 3 dva, could use 2 dva (4) as well
+H = define_spatial_filter(filter_width);
+info_type = 'spatial';%type of mutual information analysis to perform
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -40,94 +38,40 @@ if isempty(task_file)
     warning('No file could be found for specificed task. Exiting function...')
     return
 end
-load([data_dir task_file(1:end-11) '-preprocessed.mat'],'data','cfg','valid_trials','hdr');
+load([data_dir task_file(1:end-11) '-preprocessed.mat'],'data','cfg','valid_trials',...
+    'hdr','whole_session_mean_firing_rate','excitatory_inhibitory');
 %grab unit data
 [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
     multiunit,unit_confidence,sorting_quality);
 clear unit_names
 
-if num_units == 0;
+if num_units == 0; %if no units exit function
+    disp([task_file(1:8) ': no units could be found. Exiting function...'])
     return;
 end
 
-num_trials = length(cfg.trl);
-%NaNs are for start and end trials otherwise cut
-valid_trials(1,isnan(valid_trials(1,:))) = 1;
-valid_trials(2,isnan(valid_trials(2,:))) = num_trials;
-
 %---determine number of blocks unit was stable for
 %remove units with too few trials
-%these are the absolute minimum data required to do data analysis may want
-%to be more strigent later but not worth doing analysis (especially
-%shuffling) on such few trials for these neurons
+%these are the absolute minimum data required to do data analysis
 if strcmpi(task,'cvtnew')
-     minimum_trials_1 = 100;
-     
-     for unit = 1:num_units
-         start_end = valid_trials(:,unit);
-         if isnan(start_end(1))
-             start_end(1) = 1;
-         end
-         if isnan(start_end(2))
-             start_end(2) = length(cfg.trl);
-         end
-         start_end(start_end == 0) = 1;
-         min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
-         max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
-         
-         if max_trial-min_trial < minimum_trials_1
-            valid_trials(:,unit) = NaN;
-         end
-     end
+    min_blks = 1; %~100 trials may want to change
 else
-    if str2double(task_file(3:8)) < 140805 %7 second viewing with fewere sequence trials
-        minimum_trials_1 = 101; %for session start minimum number of trials: includes fam block and 16 novel/repeat images + sequence trials
-        minimum_trials_2 =  80;%for rest of session: includes 16 novel/repeat images + sequence trials
-    else
-        minimum_trials_1 = 117; %for session start minimum number of trials: includes fam block and 16 novel/repeat images + sequence trials
-        minimum_trials_2 =  96;%for rest of session: includes 16 novel/repeat images + sequence trials
-    end
-    
-    for unit = 1:num_units
-        start_end = valid_trials(:,unit);
-        if isnan(start_end(1))
-            start_end(1) = 1;
-        end
-        if isnan(start_end(2))
-            start_end(2) = length(cfg.trl);
-        end
-        start_end(start_end == 0) = 1;
-        min_trial = cfg.trl(start_end(1)).cnd-1000; %get the first condition number
-        max_trial = cfg.trl(start_end(2)).cnd-1000; %get the last condition number
-        
-        if min_trial < 22 %includes fam block
-            min_trial = 22; %remove then count from there
-        end
-        num_blks = floor((max_trial-min_trial+1)/minimum_trials_2);
-        
-        if num_blks < min_blks
-            valid_trials(:,unit) = NaN;
-        end
-    end
+    min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
+    %this means at least 64 viewed images counting novel+repeat presentations
 end
+valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks,task);
+if all(isnan(valid_trials(1,:)))
+    disp([task_file(1:8) ': no valid units could be found. Exiting function...'])
+    return %since no valid units skip analysis
+end
+
 switch task
     case {'cvtnew','CVTNEW'}
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---import & reformat data so that spikes are locked to dot position---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        %also need to load meta data which is the dot position
-        load([data_dir task_file(1:end-11) '-preprocessed.mat'],'meta');
-        
-        
         disp('Collecting Spike Locations')
-        
-        %set/get some general important info
-        num_trials = length(cfg.trl);
-        
-        %NaNs are for start and end trials otherwise cut
-        valid_trials(1,isnan(valid_trials(1,:))) = 1;
-        valid_trials(2,isnan(valid_trials(2,:))) = num_trials;
         
         Fs = data(1).fsample; %should be 1000
         ITIstart_code = 15;
@@ -193,13 +137,13 @@ switch task
                 continue
             end
             [filtered_time] = filter_time(trial_data{1},imageX,imageY,Fs,binsize,H);
-            filtered_time(filtered_time < min_bin_dur) = NaN;
+            filtered_time(filtered_time == 0) = NaN;
             [filtered_space] = filter_space(trial_data{1},trial_data{2},imageX,imageY,binsize,H);
             
             fr = filtered_space./filtered_time; %observed firing rate over space
             peak_firing_rate(unit) = prctile(fr(1:end),99);%don't want to grab outliers
         end
-
+        
         info_type = 'spatial_cvtnew';%type of mutual information analysis to perform
         
         spatial_info.rate = NaN(1,num_units); %the observed information rate in bits/sec
@@ -207,26 +151,18 @@ switch task
         spatial_info.shuffled_info_rate = cell(1,num_units); %bootstrapped information rate in bits/sec expected by chance from spike train
         spatial_info.shuffled_spatialstability = cell(1,num_units); %bootstrapped spatial stability expected by chance from spike train
         trial_data{3} = [imageX imageY];
-        trial_data{4} = min_bin_dur;
         for unit = 1:num_units
-            if peak_firing_rate(unit) > fr_threshold
-                
-                trial_data{1} = dotpos{unit};
-                trial_data{2} = spike_times{unit};
-                
-                [observed_info_rate,shuffled_info_rate]...
-                    = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
-                
-                spatial_info.rate(unit) = observed_info_rate.skaggs;
-                spatial_info.spatialstability(unit) = observed_info_rate.spatialstability;
-                spatial_info.shuffled_info_rate{unit} = shuffled_info_rate.skaggs;
-                spatial_info.shuffled_spatialstability{unit} = shuffled_info_rate.spatialstability;
-            else
-                spatial_info.rate(unit) = NaN;
-                spatial_info.spatialstability(unit) = NaN;
-                spatial_info.shuffled_info_rate{unit} = NaN;
-                spatial_info.shuffled_spatialstability{unit} = NaN;
-            end
+            
+            trial_data{1} = dotpos{unit};
+            trial_data{2} = spike_times{unit};
+            
+            [observed_info_rate,shuffled_info_rate]...
+                = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
+            
+            spatial_info.rate(unit) = observed_info_rate.skaggs;
+            spatial_info.spatialstability(unit) = observed_info_rate.spatialstability;
+            spatial_info.shuffled_info_rate{unit} = shuffled_info_rate.skaggs;
+            spatial_info.shuffled_spatialstability{unit} = shuffled_info_rate.spatialstability;
         end
         
         %estimate the significance threshold has the 95-percentile of the
@@ -249,13 +185,12 @@ switch task
         unit_names.multiunit = multiunit;
         unit_names.name = cfg.channel;
         spatial_analysis_plotsV2(figure_dir,task_file,dotpos,spike_times,spatial_info,task_type,...
-            unit_names,[binsize,filter_width],imageX,imageY,NaN,Fs,fr_threshold,min_bin_dur);
+            unit_names,[binsize,filter_width],imageX,imageY,NaN,Fs);
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Finally save all the data---%%%
         save([data_dir task_file(1:10) '-spatial_analysis_results.mat'],...
-            'spike_times','dotpos','spatial_info','binsize','filter_width',...
-            'fr_threshold')
+            'spike_times','dotpos','spatial_info','binsize','filter_width')
         disp(['Spatial Data Analyis for ' task_file(1:10) ' saved']);
         
     case 'ListSQ'
@@ -271,13 +206,13 @@ switch task
         ITIstart_code = 15;
         img_on_code= 23;
         img_off_code = 24;
-        imageX = 800; %horizontal size of the image
-        imageY = 600; %horizontal size of the image
+        imageX = 800; %horizontal size of the image in pixels
+        imageY = 600; %horizontal size of the image in pixels
         
         %set the image duration
-        if str2double(task_file(3:8)) < 140805
+        if str2double(task_file(3:8)) < 140805 %first sets done by PW before this data had 7 s images
             imgdur = 7000;
-        else
+        else %rest of image presentations were 5 seconds
             imgdur = 5000;
         end
         
@@ -285,7 +220,8 @@ switch task
         [itmlist,sequence_items] = read_ListSQ_itm_and_cnd_files(item_file,cnd_file);
         [which_img,novel_vs_repeat,img_cnd] = get_image_numbers(cfg,itmlist,sequence_items,img_on_code);
         
-        %preallocate space and parallel structure of cfg
+        %---preallocate space and parallel structure of cfg---%
+        %Each unit gets own cell since each unit may have different amount of trials/data
         eyepos = cell(1,num_units);
         spike_times = cell(1,num_units);
         which_images = cell(1,num_units);
@@ -299,41 +235,38 @@ switch task
         
         for t = 1:num_trials
             if any(cfg.trl(t).allval == img_on_code) && itmlist(cfg.trl(t).cnd-1000) > sequence_items(end) %only want image trials
-                trial_start = cfg.trl(t).alltim(cfg.trl(t).allval == ITIstart_code);
-                
-                imgon =  cfg.trl(t).alltim(cfg.trl(t).allval == img_on_code)-trial_start+twin; %want to avoid visual response
+                trial_start = cfg.trl(t).alltim(cfg.trl(t).allval == ITIstart_code); %should be first code in sequence
+                imgon =  cfg.trl(t).alltim(cfg.trl(t).allval == img_on_code)-trial_start; %want to avoid visual response
                 imgoff = cfg.trl(t).alltim(cfg.trl(t).allval == img_off_code)-trial_start;
                 
-                % if monkey isn't paying attention data isn't probably
-                % worth much plus have to cut off somewhere
-                if imgoff-imgon > 1.5*imgdur-1
+                % if monkey isn't paying attention and looked away image presentation
+                % is now longer than imgdur (because of cumulative looking time) 
+                % so data isn't probably worth much plus have to cut off somewhere
+                if imgoff-imgon > 1.5*imgdur-1 %cut off trial at 1.5x length of desired looking time
                     imgoff = imgon+1.5*imgdur-1;
                 end
+                imgon = imgon+image_on_twin;
                 
-                xn = round(data(eyechans(1)).values{t}(imgon:imgoff));
-                yn = round(data(eyechans(2)).values{t}(imgon:imgoff));
+                xn = round(data(eyechans(1)).values{t}(imgon:imgoff)); %horizontal eye data
+                yn = round(data(eyechans(2)).values{t}(imgon:imgoff)); %vertical eye data
                 
-                img_index = find(img_cnd == cfg.trl(t).cnd);
+                img_index = find(img_cnd == cfg.trl(t).cnd); %get image index
                 
-                if isempty(img_index)
+                if any(isnan(which_img(img_index)))%presentation error so skip trial, see get_image_numbers.m
                     continue
                 end
+
                 for unit = 1:num_units
                     if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only valid trials for this unit
-                        eyepos{unit}(2*t-1,1:length(xn)) = xn;
-                        eyepos{unit}(2*t,1:length(yn)) = yn;
-                        
-                        if any(isnan(which_img(img_index)))
-                            continue
-                        end
-                        
+                        eyepos{unit}(2*t-1,1:length(xn)) = xn; %horizontal eye data
+                        eyepos{unit}(2*t,1:length(yn)) = yn; %vertical eye data
+                       
                         which_images{unit}(t) = which_img(img_index);
                         nvr{unit}(t) = novel_vs_repeat(img_index);
                         
                         spikes = find(data(unit).values{t});
                         if ~isempty(spikes)
-                            spikeind = spikes(spikes >= imgon & spikes <= imgoff)-imgon;
-                            spikeind(spikeind == 0) = []; %happened exactly at the same time
+                            spikeind = spikes(spikes > imgon & spikes <= imgoff)-imgon;
                             temp = zeros(1,length(xn));
                             temp(spikeind) = 1;
                             spike_times{unit}(t,1:length(temp)) = temp;
@@ -347,8 +280,8 @@ switch task
         end
         
         %remove excess NaNs associated with error trials
-        eyepos = laundry(eyepos,1);
-        spike_times = laundry(spike_times,1);
+        eyepos = laundry(eyepos,1); %only remove rows aka trials without data
+        spike_times = laundry(spike_times,1);  %only remove rows aka trials without data
         which_images = laundry(which_images);
         nvr = laundry(nvr);
         
@@ -357,13 +290,11 @@ switch task
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         disp('Determining if neurons are spatially modulated')
         
-        info_type = 'spatial';%type of mutual information analysis to perform
-        
         %--calculate peak firing rate---%
-        peak_firing_rate = NaN(3,num_units);
+        peak_firing_rate = NaN(3,num_units);%row 1 novel, row 2 repeat, row 3 all images
         for unit = 1:num_units
             if isnan(valid_trials(1,unit)); %no valid trials for unit
-               continue 
+                continue
             end
             for condition = 1:3
                 if condition == 1 %novel images
@@ -378,52 +309,59 @@ switch task
                 end
                 if nansum(nansum(trial_data{2})) == 0 %this occassiionally happens with really specifc/low firing rate neurons...
                     %and we don't want a NaN
-                    if size(eyepos{unit},1) >= 32 %at least have data for 1 novel/repeat block
-                        peak_firing_rate(condition,unit) = 0;
-                        continue
-                    end
+                    peak_firing_rate(condition,unit) = 0;
+                    continue
                 end
-  
-                filtered_time = filter_time(trial_data{1},imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time < min_bin_dur) = NaN;
-                filtered_space = filter_space(trial_data{1},trial_data{2},imageX,imageY,binsize,H);
-                fr = filtered_space./filtered_time; %observed firing rate over space
-                peak_firing_rate(condition,unit) = prctile(fr(1:end),99);%don't want to grab outliers
+                
+                [ratemap,~] = get_firing_rate_map(trial_data,imageX,imageY,binsize,H,Fs,'all');
+                peak_firing_rate(condition,unit) = prctile(ratemap(:),97.5);%don't want to grab outliers
             end
         end
         
-        %will perform spatial analysis on novel images, repeat images, and all images
+        %---Determine if Neuron is more spatial than chance---%
         spatial_info.rate = NaN(1,num_units); %the observed information rate in bits/sec
         spatial_info.shuffled_info_rate = cell(1,num_units); %bootstrapped information rate in bits/sec expected by chance from spike train
+        spatial_info.shuffled_rate_prctile = NaN(1,num_units);
+        
+        %spatial correlation first vs second half row 1 spearman row 2 Kendall
+        spatial_info.spatialstability_halves = NaN(1,num_units);
+        spatial_info.shuffled_spatialstability_halves = cell(1,num_units);
+        spatial_info.spatialstability_halves_prctile = NaN(1,num_units);
+        
+        %spatial correlation even and odd trials row 1 spearman row 2 Kendall
+        spatial_info.spatialstability_even_odd = NaN(1,num_units);
+        spatial_info.shuffled_spatialstability_even_odd = cell(1,num_units);
+        spatial_info.spatialstability_even_odd_prctile = NaN(1,num_units);
+        
         trial_data{3} = [imageX imageY];
-        trial_data{4} = min_bin_dur; 
         for unit = 1:num_units
-%             if any(peak_firing_rate(:,unit) > fr_threshold) %don't run on firing rates that are too low
+            if ~isempty(spike_times{unit})
                 trial_data{1} = eyepos{unit};
                 trial_data{2} = spike_times{unit};
                 [observed_info_rate,shuffled_info_rate]...
                     = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
                 
+                %skaggs information score
                 spatial_info.rate(unit) = observed_info_rate.skaggs;
-                spatial_info.spatialstability(unit) = observed_info_rate.spatialstability;
                 spatial_info.shuffled_info_rate{unit} = shuffled_info_rate.skaggs;
-                spatial_info.shuffled_spatialstability{unit} = shuffled_info_rate.spatialstability;
-%             end
-        end
-        
-        %estimate the significance threshold has the 95-percentile of the
-        %bootstrapped data
-        for unit = 1:num_units
-            if ~isempty(spatial_info.shuffled_info_rate{unit})
-                spatial_info.shuffled_rate_prctile(unit) = ...
-                    100*sum(spatial_info.rate(unit) > ...
-                    spatial_info.shuffled_info_rate{unit})/numshuffs;
-                spatial_info.shuffled_spatialstability_prctile(unit) = ...
-                    100*sum(spatial_info.spatialstability(unit) > ...
-                    spatial_info.shuffled_spatialstability{unit})/numshuffs;
-            else
-                spatial_info.shuffled_rate_prctile(unit) = NaN;
-                spatial_info.shuffled_spatialstability_prctile(unit)=NaN;
+                spatial_info.shuffled_rate_prctile(unit) = 100*sum(...
+                    spatial_info.rate(unit) > spatial_info.shuffled_info_rate{unit})/numshuffs;
+                
+                %spatial correlation first half vs second half
+                spatial_info.spatialstability_halves(unit) = observed_info_rate.spatialstability_halves;
+                spatial_info.shuffled_spatialstability_halves{unit} = shuffled_info_rate.spatialstability_halves;
+                spatial_info.spatialstability_halves_prctile(unit) = ...
+                    100*sum(spatial_info.spatialstability_halves(unit) > ...
+                    spatial_info.shuffled_spatialstability_halves{unit})/numshuffs;
+            
+                
+                %spatial correlation for even and odd trials
+                spatial_info.spatialstability_even_odd(unit) = observed_info_rate.spatialstability_even_odd;
+                spatial_info.shuffled_spatialstability_even_odd{unit} =...
+                    shuffled_info_rate.spatialstability_even_odd;
+                spatial_info.spatialstability_even_odd_prctile(unit) = ...
+                    100*sum(spatial_info.spatialstability_even_odd(unit) > ...
+                    spatial_info.shuffled_spatialstability_even_odd{unit})/numshuffs;
             end
         end
         
@@ -433,20 +371,19 @@ switch task
         task_type = 'List_spatial';
         unit_names.multiunit = multiunit;
         unit_names.name = unit_stats(1,:);
+        unit_names.avg_firing_rate = whole_session_mean_firing_rate;
+        unit_names.putative_EI = excitatory_inhibitory;
         spatial_analysis_plotsV2(figure_dir,task_file,eyepos,spike_times,spatial_info,task_type,...
-            unit_names,[binsize,filter_width],imageX,imageY,nvr,Fs,peak_firing_rate,fr_threshold,...
-            min_bin_dur);
+            unit_names,[binsize,filter_width],imageX,imageY,nvr,Fs,peak_firing_rate);
         
-   
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Finally save all the data---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         save([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],...
             'spike_times','eyepos','spatial_info','nvr','which_images',...
-            'binsize','filter_width','peak_firing_rate','fr_threshold',...
-            'min_bin_dur','twin')
-        %'spike_times_ts','spatial_info_ts')
-        disp(['Spatial Data Analyis for ' task_file(1:end-11) ' saved']);
+            'binsize','filter_width','peak_firing_rate','image_on_twin','Fs',...
+            'whole_session_mean_firing_rate','excitatory_inhibitory','unit_names')
+        disp(['ListSQ Spatial Data Analyis for ' task_file(1:end-11) ' saved']);
 end
 end

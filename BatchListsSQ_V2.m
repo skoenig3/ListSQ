@@ -9,7 +9,8 @@ clar
 
 % parpool
 task = 'ListSQ';
-for monkey = 1:2
+set(0,'DefaultFigureVisible','ON');
+for monkey = 2:-1:1
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
@@ -42,9 +43,9 @@ for monkey = 1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Import and Pre-Process Recording Data---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %    for session = 1:length(session_data)
-    %         ImportListSQRecordingDataV2(data_dir,figure_dir,session_data{session})
-    %     end
+    %        for session = 1:length(session_data)
+    %             ImportListSQRecordingDataV2(data_dir,figure_dir,session_data{session})
+    %         end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Plot Waveforms and Rasters to Determine Firing Stability---%%%
@@ -58,12 +59,27 @@ for monkey = 1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Spatially Modulated---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    for session = 1:length(session_data)
-        disp(['#' num2str(session) ' ' session_data{session}.task1_file])
-        spatial_analysisV2(data_dir,figure_dir,session_data{session},task)
-    end
-    emailme('Done spatial')
+    %             for session = 1:length(session_data)
+    %                 disp(['#' num2str(session) ' ' session_data{session}.task1_file])
+    %                 spatial_analysisV2(data_dir,figure_dir,session_data{session},task)
+    %             end
+    %             emailme('Done spatial')
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine Place Cells Fixation Activity in Field vs out Field---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    for session = 2:length(session_data)
+         disp(['#' num2str(session) ' ' session_data{session}.task1_file])
+        Place_Cell_Fixation_Analysis(data_dir,figure_dir,session_data{session})
+    end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine if Neurons are Fixation/Saccade Modulated in List Task---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%     for session = 1:length(session_data)
+%         List_Saccade_AnalysisV2(data_dir,figure_dir,session_data{session})
+%     end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Temporally Modulated---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -71,11 +87,35 @@ for monkey = 1:2
     %         time_locked_analysisV2(data_dir,figure_dir,session_data{session},task)
     %     end
     
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%---Determine if Neurons are Saccade Modulated---%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %     for session = 2%1:length(session_data)
-    %         List_Saccade_AnalysisV2(data_dir,figure_dir,session_data{session})
+
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine if Neurons are Fixaiton Modulated in Sequence Task---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %     for session = 1:length(session_data)
+    %         Sequence_Fixation_AnalysisV2(data_dir,figure_dir,session_data{session})
+    %     end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine if Neurons are Visually reponsive/like Cross hair---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %     for session = 39:length(session_data)
+    %         Visual_Response_AnalysisV2(data_dir,figure_dir,session_data{session});
+    %     end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine if Neurons are Firing During ITI Period---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %     for session = 1:length(session_data)
+    %         ITI_analysis(data_dir,figure_dir,session_data{session})
+    %     end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine if Neurons are Firing During ITI Period---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %     for session = 1:length(session_data)
+    %         Reward_analysis(data_dir,figure_dir,session_data{session})
     %     end
 end
 emailme('Batch Done Running')
+set(0,'DefaultFigureVisible','ON');

@@ -1,6 +1,5 @@
 function spatial_analysis_plotsV2(figure_dir,task_file,position,spike_times,spatial_info,...
-    task_type,unit_names,smval,imageX,imageY,trial_type,Fs,peak_firing_rate,fr_threshold,...
-    min_bin_dur)
+    task_type,unit_names,smval,imageX,imageY,trial_type,Fs,peak_firing_rate)
 % written by Seth Konig August, 2014
 % generates and save plots for spatial spike analysis
 % % updated SDK 1/11/17 to handlde new format and partial session data for
@@ -27,146 +26,104 @@ function spatial_analysis_plotsV2(figure_dir,task_file,position,spike_times,spat
 %
 % Outputs:
 %   1) saved figures into figure_dir
+%
+% Code rechecked ListSQ section for bugs October 18-19, 2016 SDK
 
 figure_dir = [figure_dir 'Spatial Analysis\'];
-tooslow_firing_folder = [figure_dir '\FiringRateTooSlow_Spatial\'];
 num_units = length(position);
-
 
 switch task_type
     case 'List_spatial'
         binsize = smval(1); %number of pixels per spatial bing
         filter_width = smval(2); %std of 2D gaussian smoothing filter
-        filter_size = filter_width*10;
-        H = fspecial('gaussian',filter_size,filter_width);
+        H = define_spatial_filter(filter_width);
         
         for unit = 1:num_units
             if ~isnan(peak_firing_rate(1,unit))
                 clims = NaN(2,3);
+                num_trials_str = [' n_ = ' num2str(size(spike_times{unit},1))];
+
                 figure
                 
-                
-                %Calculated smoothed firing rate for all images
-                filtered_time = filter_time(position{unit},imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
-                filtered_space = filter_space(position{unit},spike_times{unit},imageX,imageY,binsize,H);
-                firing_rate = filtered_space./filtered_time;
-                
-                
-                %%%%%%%%%%%%%%%%%%%%%%%%%%
-                %---Define Place Field---%
-                %%%%%%%%%%%%%%%%%%%%%%%%%%
-                fr = sort(firing_rate(1:end));
-                fr(isnan(fr)) = [];
-                sil = zeros(1,4); %determines the number of clusters by comparing the ratio
-                %of intercluster and intracluster distances, faster mod of silhouette
-                for numclusts = 2:4
-                    T = kmeans(fr',numclusts,'replicate',5);
-                    [silh] = InterVSIntraDist(fr',T);
-                    sil(numclusts) = mean(silh);
-                end
-                numclusters = find(sil == max(sil));
-                T = kmeans(fr',numclusters(end),'replicate',25);
-                
-                region_mean_fr = zeros(1,numclusters);
-                for t = 1:numclusters
-                    region_mean_fr(t) = mean(fr(T == t));
-                end
-                [~,place_field_cluster] = max(region_mean_fr);
-                min_firing_rate = min(fr(T == place_field_cluster));
-
-                [r,c] = find(firing_rate > min_firing_rate);
-                firing_ind = sub2ind(size(firing_rate),r,c);
-                threshold_matrix = zeros(size(firing_rate));
-                threshold_matrix(firing_ind) = 1;%want opposite to remove outside field
-                threshold_matrix(isnan(firing_rate)) = NaN; %remove locations with too little data from further analysis
-                if sum(sum(~isnan(threshold_matrix))) < 20
-                    continue %way too little area to process
-                end
-                threshold_matrix = imresize(threshold_matrix,[imageY,imageX],'method','nearest');%upsample to images size in pixel coordinates
-                
-                make_spike_jittered_plot_threshold(position{unit},spike_times{unit},threshold_matrix,[2 3],1)
-                title('Thresholded: All images')
+                %---draw raw spikes on all images all locations---%
+                make_spike_jittered_plot(position{unit},spike_times{unit},[2 3],1)
+                title(['Raw: All images,' num_trials_str])
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 
-                %draw raw spikes on all images all locations
-                make_spike_jittered_plot(position{unit},spike_times{unit},[2 3],2)
-                title('Raw: All images')
+                %---plot spike locations color coded by 1st half vs second half of session/by time---%
+                make_spike_jittered_colored_plot(position{unit},spike_times{unit},[2 3],2)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 
-                %plot color coded by portion of session/by time
-                make_spike_jittered_colored_plot(position{unit},spike_times{unit},[2 3],3)
+                title(sprintf(['Halves: \\rho_{1/2} = ' num2str(spatial_info.spatialstability_halves(unit),2) ...
+                    ' ' num2str(spatial_info.spatialstability_halves_prctile(unit),3) '%%']))
+                
+                %---plot spike locations color code by even and odd trials---%
+                make_spike_jittered_colored_plot_even_odd(position{unit},spike_times{unit},[2 3],3)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
-                if any(spatial_info.shuffled_spatialstability_prctile(unit) >= 90)
-                    title(sprintf(['All images color-coded by time \n' ....
-                        'r = ' num2str(spatial_info.spatialstability(unit),2) ' ' ...
-                        num2str(spatial_info.shuffled_spatialstability_prctile(unit),2) '%%']))
-                else
-                    title('All images color-coded by time')
-                end
+                
+                title(sprintf(['Even/Odd: \\rho_{e/o} = ' num2str(spatial_info.spatialstability_even_odd(unit),2) ...
+                    ' ' num2str(spatial_info.spatialstability_even_odd_prctile(unit),3) '%%']))
+                
+                
+                %---Plot Rate Map for All Images---%
+                ratemap = get_firing_rate_map({position{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all');
                 
                 subplot(2,3,4)
-                h = imagesc(filtered_space./filtered_time);
-                set(h,'alphadata',~isnan(filtered_time));
+                h = imagesc(ratemap);
+                %                 hold on
+                %                 gry = 0.5*ones(size(ratemap,1),size(ratemap,2),3);
+                %                 h = imshow(gry);
+                %                 hold off
+                %                 set(h,'alphadata',isnan(ratemap));
+                set(h,'alphadata',~isnan(ratemap));
                 axis off
                 axis equal
                 
-                fr = sort(firing_rate(1:end));
-                fr(isnan(fr)) = [];
                 clims(:,1) = caxis;
-                if length(fr) > 20
-                    clims(2,1) = fr(round(0.99*length(fr)));% the ~99%-tile
-                end
+                max_fr = prctile(ratemap(:),97.5); % the ~97.5%-tile
+                clims(2,1) = max_fr;
                 
-                if spatial_info.shuffled_rate_prctile(unit) >= 90;
-                    title(sprintf(['All images, peak rate = ' num2str(max(fr),3) ...
-                        ' Hz \n Bits = ' num2str(spatial_info.rate(unit),3) ' ' ...
-                        num2str(spatial_info.shuffled_rate_prctile(unit),3) '%%']))
-                else
-                    title(['All images, peak rate = ' num2str(peak_firing_rate(3,unit),3) ' Hz'])
-                end
+                title(sprintf(['All images, peak rate = ' num2str(max_fr,3) ...
+                    ' Hz \n Bit/s = ' num2str(spatial_info.rate(unit),3) ' ' ...
+                    num2str(spatial_info.shuffled_rate_prctile(unit),3) '%%']))
+                
+                %---plot firing rate map for novel images---%
+                nov_ratemap = get_firing_rate_map({select_eyepos(position{unit},trial_type{unit} ==1),...
+                    spike_times{unit}(trial_type{unit} ==1,:)},imageX,imageY,binsize,H,Fs,'all');
                 
                 subplot(2,3,5)
-                filtered_time = filter_time(select_eyepos(position{unit},trial_type{unit} ==1),imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
-                filtered_space = filter_space(select_eyepos(position{unit},trial_type{unit} ==1),spike_times{unit}(trial_type{unit} ==1,:),imageX,imageY,binsize,H);
-                h = imagesc(filtered_space./filtered_time);
-                set(h,'alphadata',~isnan(filtered_time));
+                h = imagesc(nov_ratemap);
+                set(h,'alphadata',~isnan(nov_ratemap));
                 axis off
                 axis equal
                 
-                
-                fr = sort(filtered_space(1:end)./filtered_time(1:end));
-                fr(isnan(fr)) = [];
+               
                 clims(:,2) = caxis;
-                if length(fr) > 20
-                    clims(2,2) = fr(round(0.99*length(fr)));% the ~99%-tile
-                end
-
-                title(sprintf(['Novel images, peak rate = '  num2str(peak_firing_rate(1,unit),3) ' Hz']))
+                max_fr = prctile(nov_ratemap(:),97.5); % the ~97.5%-tile
+                clims(2,2) = max_fr;
                 
+                title(sprintf(['Novel images, peak rate = '  num2str(max_fr,3) ' Hz']))
+                
+                
+                %---plot firing rate map for repeat images---%
+                rep_ratemap = get_firing_rate_map({select_eyepos(position{unit},trial_type{unit} ==2),...
+                    spike_times{unit}(trial_type{unit} ==2,:)},imageX,imageY,binsize,H,Fs,'all');
                 
                 subplot(2,3,6)
-                filtered_time = filter_time(select_eyepos(position{unit},trial_type{unit} ==2),imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
-                filtered_space = filter_space(select_eyepos(position{unit},trial_type{unit} ==2),spike_times{unit}(trial_type{unit} ==2,:),imageX,imageY,binsize,H);
-                h = imagesc(filtered_space./filtered_time);
-                set(h,'alphadata',~isnan(filtered_time));
+                h = imagesc(rep_ratemap);
+                set(h,'alphadata',~isnan(rep_ratemap));
                 axis off
                 axis equal
                 
                 
-                fr = sort(filtered_space(1:end)./filtered_time(1:end));
-                fr(isnan(fr)) = [];
                 clims(:,3) = caxis;
-                if length(fr) > 20
-                    clims(2,3) = fr(round(0.99*length(fr)));% the ~99%-tile
-                end
+                max_fr = prctile(rep_ratemap(:),97.5); % the ~97.5%-tile
+                clims(2,3) = max_fr;
                 
-                title(sprintf(['Repeat images, peak rate = '  num2str(peak_firing_rate(2,unit),3) ' Hz']))
+                title(sprintf(['Repeat images, peak rate = '  num2str(max_fr,3) ' Hz']))
                 
                 minc = nanmin(clims(1,:));
                 maxc = nanmax(clims(2,:));
@@ -174,8 +131,8 @@ switch task_type
                 minc = minc - 0.15*diffc;
                 for sp = 4:6
                     subplot(2,3,sp)
+                    %colormap(viridis)
                     colormap('jet')
-                    shading interp
                     caxis([minc maxc])
                     
                     if sp == 4;
@@ -187,27 +144,33 @@ switch task_type
                     colormap(c);
                 end
                 
-                num_trials_str = [' n_ = ' num2str(size(spike_times{unit},1))];
+                %label as putative single or multi-unit
                 if unit_names.multiunit(unit)
                     multi_str = 'Multiunit ';
                 else
                     multi_str = ' ';
                 end
                 
-                subtitle(['Spatial Plots' num_trials_str multi_str unit_names.name{unit}]);
-
-                if all(peak_firing_rate(:,unit) < fr_threshold) %peak rate must be greater than 1 Hz to process
-                    save_and_close_fig(tooslow_firing_folder,[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
+                %label as putative excitatory/inhibitory neuron based on
+                %whole session average firing rate
+                if unit_names.putative_EI(unit) == 1 %putative excitatory neuron
+                    avg_firing_rate_str = [', avg FR = ' num2str(unit_names.avg_firing_rate(unit),2) ...
+                        ' Hz, putative Excitatory Neuron'];
+                elseif unit_names.putative_EI(unit) == 2 %putative inhibitory neuron
+                    avg_firing_rate_str = [', avg FR = ' num2str(unit_names.avg_firing_rate(unit),2) ...
+                        ' Hz, putative Inhibitory Neuron'];
+                end
+                
+                subtitle([multi_str task_file(1:8) ' ' multi_str unit_names.name{unit} avg_firing_rate_str]);
+                
+                if unit_names.multiunit(unit)
+                    save_and_close_fig([figure_dir '\MultiUnit\'],[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
                 else
-                    if unit_names.multiunit(unit)
-                        save_and_close_fig([figure_dir '\MultiUnit\'],[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
-                    else
-                        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
-                    end
+                    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_List_spatial_analysis']);
                 end
             end
         end
-
+        
     case 'cvtnew_spatial'
         binsize = smval(1); %number of pixels per spatial bing
         filter_width = smval(2); %std of 2D gaussian smoothing filter
@@ -226,7 +189,7 @@ switch task_type
                 
                 subplot(1,2,2)
                 filtered_time = filter_time(position{unit},imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time < min_bin_dur) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
+                filtered_time(filtered_time == 0) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
                 filtered_space = filter_space(position{unit},spike_times{unit},imageX,imageY,binsize,H);
                 imagesc(filtered_space./filtered_time);
                 
