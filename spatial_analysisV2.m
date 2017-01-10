@@ -245,7 +245,7 @@ switch task
                 if imgoff-imgon > 1.5*imgdur-1 %cut off trial at 1.5x length of desired looking time
                     imgoff = imgon+1.5*imgdur-1;
                 end
-                imgon = imgon+image_on_twin;
+                imgon = imgon+image_on_twin; %to avoid visual response and strong central bias
                 
                 xn = round(data(eyechans(1)).values{t}(imgon:imgoff)); %horizontal eye data
                 yn = round(data(eyechans(2)).values{t}(imgon:imgoff)); %vertical eye data
