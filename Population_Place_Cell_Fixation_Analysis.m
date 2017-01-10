@@ -201,7 +201,7 @@ for monk =2:-1:1
                     for g = 1:size(gaps,1)
                         gp = gaps(g,:);
                         gp(gp == 0) = [];
-                        if length(gp) > smval
+                        if length(gp) > smval %2 standard deviation
                             pass = 1;
                             break
                         end
@@ -216,7 +216,7 @@ for monk =2:-1:1
                     for g = 1:size(gaps,1)
                         gp = gaps(g,:);
                         gp(gp == 0) = [];
-                        if length(gp) > smval
+                        if length(gp) > smval %2 standard deviation
                             pass2 = 1;
                             break
                         end
@@ -267,7 +267,7 @@ for monk =2:-1:1
                             for g = 1:size(gaps_pos,1)
                                 gp = gaps_pos(g,:);
                                 gp(gp == 0) = [];
-                                if length(gp) < smval
+                                if length(gp) < smval %2  standard deviation
                                     rmv = [rmv g];
                                 else
                                     total_pos = total_pos+length(gp);
@@ -287,7 +287,7 @@ for monk =2:-1:1
                             for g = 1:size(gaps_neg,1)
                                 gp = gaps_neg(g,:);
                                 gp(gp == 0) = [];
-                                if length(gp) < smval
+                                if length(gp) < smval %2  standard deviation
                                     rmv = [rmv g]; %remove time points that are too short
                                 else
                                     total_neg = total_neg+length(gp);
