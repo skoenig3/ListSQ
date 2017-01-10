@@ -1,5 +1,5 @@
 %written by Seth Konig September 14, 2016
-%code extacts fixation durations, saccade rate, and saccade amplitudes
+%code extacts fixation durations, saccade rate, saccade_durations, and saccade amplitudes
 %
 % code rechecked 1/9/2017 SDK
 
@@ -12,6 +12,7 @@ img_off_code = 24; %end of image presentation
 set = 0;%set index #
 fixation_durations = cell(2,85);
 saccade_amplitudes = cell(2,85);
+saccade_durations = cell(2,85);
 
 for monkey = 1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -72,6 +73,8 @@ for monkey = 1:2
         fixation_durations{2,set} = NaN(96,40);
         saccade_amplitudes{1,set} = NaN(96,40);
         saccade_amplitudes{2,set} = NaN(96,40);
+        saccade_durations{1,set} = NaN(96,40);
+        saccade_durations{2,set} = NaN(96,40);
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %---Get Behavioral Stats---%
@@ -123,6 +126,9 @@ for monkey = 1:2
                 fixdurs = diff(fixationtimes)+1; %calculate fixation duration
                 fixation_durations{nvr,set}(which_image,1:size(fixationtimes,2)) = fixdurs;
                 
+                sacdurs = diff(saccadetimes)+1; %calculate sacccade duration
+                saccade_durations{nvr,set}(which_image,1:size(saccadetimes,2)) = sacdurs;
+                
                 for f = 2:size(fixationtimes,2)%ignore first fixation not sure where it was/possibly contaminated anyway
                     prior_sac = find(saccadetimes(2,:) == fixationtimes(1,f)-1);%next fixation should start immediately after
                     if isempty(prior_sac) %no prior saccade so was proabbly looking off screen
@@ -136,129 +142,129 @@ for monkey = 1:2
     end
 end
 %% Fixuation Durations by Ordinal Fixation #
-all_durs = cell(1,2); %all fixation durations
-nov = NaN(size(fixation_durations,2),15);
-rep = NaN(size(fixation_durations,2),15);
-ordinal =  NaN(size(fixation_durations,2),15);
+all_fix_durs = []; %all fixaiton durations
+nov_fix_durs = NaN(size(fixation_durations,2),20); %median by set novel fixation durations
+rep_fix_durs = NaN(size(fixation_durations,2),20); %median by set repeat fixation durations
 for set = 1:size(fixation_durations,2);
-    all_durs{1} = [all_durs{1}; fixation_durations{1,set}(:,1:40)];
-    all_durs{2} = [all_durs{2}; fixation_durations{2,set}(:,1:40)];
-    nov(set,:) = nanmedian(fixation_durations{1,set}(:,1:15));
-    rep(set,:) = nanmedian(fixation_durations{2,set}(:,1:15));
-    ordinal(set,:) = 1:15;
+    nov_durs = fixation_durations{1,set}; %novel images
+    rep_durs = fixation_durations{2,set}; %repeat images
+    
+    %remove fixations shorter than 100 msin duration since removed from analysis
+    nov_durs(nov_durs < 100) = NaN; 
+    rep_durs(rep_durs < 100) = NaN;
+        
+    nov_fix_durs(set,:) = nanmedian(nov_durs(:,1:20)); %novel
+    rep_fix_durs(set,:) = nanmedian(rep_durs(:,1:20)); %repeat
+    
+    all_fix_durs = [all_fix_durs; nov_durs; rep_durs]; %all fixation durations
 end
-% all_durs{1}(all_durs{1} > 500) = NaN;
-% all_durs{2}(all_durs{2} > 500) = NaN;
-%
+
+%---Stats Test---%
+p_wilx = signrank(median(nov_fix_durs),median(rep_fix_durs)); %Wilcoxon signed rank test for zero median between novel and repeated images
+%nonparametric, repeated measures (across multiple fixations), analysiss
+p_vals = [];
+for f = 1:size(nov_fix_durs,2)
+    [~,p_vals(f)] = ttest(nov_fix_durs(:,f),rep_fix_durs(:,f)); %paired ttest, not sure if really valid but easy to interpret
+end
+
+%---Plot Results---%
 figure
-% subplot(1,2,1)
 hold on
-plot(nanmean(nov))
-errorb(1:20,nanmean(nov),nanstd(nov)./sqrt(sum(~isnan(nov))),'color','b')
-plot(nanmean(rep),'r')
-errorb(1:20,nanmean(rep),nanstd(rep)./sqrt(sum(~isnan(rep))),'color','r')
+plot(nanmean(nov_fix_durs))
+errorb(1:20,nanmean(nov_fix_durs),nanstd(nov_fix_durs)./sqrt(sum(~isnan(nov_fix_durs))),'color','b')
+plot(nanmean(rep_fix_durs),'r')
+errorb(1:20,nanmean(rep_fix_durs),nanstd(rep_fix_durs)./sqrt(sum(~isnan(rep_fix_durs))),'color','r')
+for f = 1:size(nov_fix_durs,2)
+   if p_vals(f) < 0.05/size(nov_fix_durs,2) %Bonferroni correction
+      plot(f,215,'k*')
+   end
+end
 hold off
 xlabel('Ordinal Fixation #')
 ylabel('Fixation Duration (ms)')
 xlim([0 21])
+ylim([160 220])
+axis square
 legend('Novel','Repeat')
-% title('PW and TO')
-title('Vivian')
+title(['PW and TO n_{sessions} = ' num2str(size(fixation_durations,2)) ', p_{Wilcoxon} = ' num2str(p_wilx,3)])
 
-durs = all_durs{1}(1:end);
-durs(durs > 500) = [];
+%% Distribution of All Fixation Durations
+durs = all_fix_durs;
+durs(durs > 400) = [];
 figure
-hist(durs,475)
+hist(durs,301)
 hold on
-plot([round(nanmean(durs)) round(nanmean(durs))],[0 1000],'k--')
+plot([round(nanmean(durs)) round(nanmean(durs))],[0 2000],'k--')
 hold off
 xlabel('Fixation Duration (ms)')
 ylabel('Count')
 title(sprintf(['Distribution of Fixation Durations \n'...
-    'mean = ' num2str(round(nanmean(durs))) 'ms median = ' num2str(round(nanmedian(durs))) ' ms']))
+    'mean = ' num2str(round(nanmean(durs))) ' ms median = ' num2str(round(nanmedian(durs))) ' ms']))
+axis square
 
-%%
-% group = [ones(numel(nov),1); 2*ones(numel(rep),1)];
-% subject = [ordinal(:); ordinal(:)];
-% groupsubj = [group subject];
-% y = [nov(:); rep(:)];
-%
-% [P,T,STATS,TERMS] = anovan(y,groupsubj,'random',[2]);
-% multcompare(STATS)
-
-p_vals = [];
-for f = 1:size(nov,2)
-    [~,p_vals(f)] = ttest(nov(:,f),rep(:,f))
-end
-signrank(median(nov),median(rep))
-friedman test
-%%
-all_rates = [];
-for set = 1:size(fixation_durations,2);
-    all_rates = [all_rates; saccade_rate{1,set}(:);saccade_rate{2,set}(:)];
-end
-all_rates(isnan(all_rates)) = [];
-all_rates = 1000./all_rates;
-all_rates(all_rates > 12) = [];
-all_rates(all_rates < 1) = [];
-
-subplot(1,2,2)
-hist(all_rates,[1:0.5:12])
-xlabel('Saccade Rate (Hz)')
-ylabel('Count')
-title(['Tobii Mean: ' num2str(mean(all_rates),3) ', Median: ' num2str(nanmedian(all_rates),3)])
-
-%%
-nov_durs = all_durs{1}(1:end);
-nov_durs(nov_durs > 500) = [];
-rep_durs = all_durs{2}(1:end);
-rep_durs(rep_durs > 500) = [];
-
-figure
-N_nov = hist(nov_durs,[25:5:500]);
-N_rep = hist(rep_durs,[25:5:500]);
-hold on
-plot([25:5:500],N_nov/sum(N_nov),'b')
-plot([nanmedian(nov_durs) nanmedian(nov_durs)],[0 0.035],'b--')
-plot([25:5:500],N_rep/sum(N_rep),'r')
-plot([nanmedian(rep_durs) nanmedian(rep_durs)],[0 0.0325],'r--')
-hold off
-xlabel('Fixation Duration (ms)')
-ylabel('Probability')
-legend('Novel','Repeat')
-title('PW and TO')
-
-
-
-%% Saccade Durations (parallels increase in saccade amplitdue effect is small)
-all_durs = cell(1,2);
+%% Distribution of All Saccade Durations
+%novel/differences really don't exist (effect ~1-2 ms)
+all_sac_durs = [];
 for set = 1:size(saccade_durations,2);
-    all_durs{1} = [all_durs{1}; saccade_durations{1,set}(:,1:40)];
-    all_durs{2} = [all_durs{2}; saccade_durations{2,set}(:,1:40)];
+    all_sac_durs = [all_sac_durs; saccade_durations{1,set}; saccade_durations{2,set}];
 end
 
-figure
-hold on
-plot(nanmean(all_durs{1}(:,1:20)))
-errorb(1:20,nanmean(all_durs{1}(:,1:20)),nanstd(all_durs{1}(:,1:20))./sqrt(sum(~isnan(all_durs{1}(:,1:20)))),'color','b')
-plot(nanmean(all_durs{2}(:,1:20)),'r')
-errorb(1:20,nanmean(all_durs{2}(:,1:20)),nanstd(all_durs{2}(:,1:20))./sqrt(sum(~isnan(all_durs{2}(:,1:20)))),'color','r')
-hold off
-xlabel('Ordinal saccade #')
-ylabel('saccade Duration (ms)')
-xlim([0 21])
-legend('Novel','Repeat')
-title('PW and TO')
-%%
-durs = all_durs{1}(1:end);
+durs =  all_sac_durs;
 durs(durs > 80) = [];
 figure
 hist(durs,70)
 hold on
-plot([round(nanmean(durs)) round(nanmean(durs))],[0 8000],'k--')
+plot([round(nanmean(durs)) round(nanmean(durs))],[0 14000],'k--')
 hold off
+xlim([10 80])
 xlabel('saccade Duration (ms)')
 ylabel('Count')
 title(sprintf(['Distribution of Sacccade Durations \n'...
-    'mean = ' num2str(round(nanmean(durs))) 'ms median = ' num2str(round(nanmedian(durs))) ' ms']))
+    'mean = ' num2str(round(nanmean(durs))) ' ms median = ' num2str(round(nanmedian(durs))) ' ms']))
+axis square
+box off
+%% Distribution of Saccade Ampltiudes
 
+nov_sac_amps = NaN(size(saccade_amplitudes,2),20); %median by set novel saccade_amplitude
+rep_sac_amps = NaN(size(saccade_amplitudes,2),20); %median by set repeat saccade_amplitude
+for set = 1:size(saccade_amplitudes,2);
+    nov_sac = saccade_amplitudes{1,set}/24; %novel  images and convert from pixel to dva
+    rep_sac = saccade_amplitudes{2,set}/24; %repeat images and convert from pixel to dva
+    
+    %remove saccades smaller than 2 dva 
+    nov_sac(nov_durs < 2) = NaN; 
+    rep_sac(rep_durs < 2) = NaN;
+        
+    nov_sac_amps(set,:) = nanmedian(nov_sac(:,1:20)); %novel
+    rep_sac_amps(set,:) = nanmedian(rep_sac(:,1:20)); %repeat
+end
+
+
+%---Stats Test---%
+p_wilx = signrank(median(nov_sac_amps),median(rep_sac_amps)); %Wilcoxon signed rank test for zero median between novel and repeated images
+%nonparametric, repeated measures (across multiple fixations), analysiss
+p_vals = [];
+for f = 2:size(nov_sac_amps,2)
+    [~,p_vals(f)] = ttest(nov_sac_amps(:,f),rep_sac_amps(:,f)); %paired ttest, not sure if really valid but easy to interpret
+end
+
+%---Plot Results---%
+figure
+hold on
+plot(nanmean(nov_sac_amps))
+errorb(1:20,nanmean(nov_sac_amps),nanstd(nov_sac_amps)./sqrt(sum(~isnan(nov_sac_amps))),'color','b')
+plot(nanmean(rep_sac_amps),'r')
+errorb(1:20,nanmean(rep_sac_amps),nanstd(rep_sac_amps)./sqrt(sum(~isnan(rep_sac_amps))),'color','r')
+for f = 1:size(nov_sac_amps,2)
+   if p_vals(f) < 0.05/size(nov_sac_amps,2) %Bonferroni correction
+      plot(f,8.5,'k*')
+   end
+end
+hold off
+xlabel('Ordinal Saccade #')
+ylabel('Saccade Amplitude (dva)')
+xlim([0 21])
+ylim([5 9])
+axis square
+legend('Novel','Repeat')
+title(['PW and TO n_{sessions} = ' num2str(size(saccade_amplitudes,2)) ', p_{Wilcoxon} = ' num2str(p_wilx,3)])
