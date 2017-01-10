@@ -13,11 +13,12 @@ function place_field_matrix = define_place_field(firing_rate_map,imageX,imageY)
 %   1) place_field_matrix: pixel by pixel maxtrix of the place field
 %   with 1's denoting the place field and 0's denoting outside place field
 
+
 %---Normalize to remove outliers at the very high end---%
-fr = sort(firing_rate_map(:));
+fr = firing_rate_map(:);
 fr(isnan(fr)) = [];
-maxfr = fr(round(0.95*length(fr)));% the ~95%-tile
-fr(fr > maxfr) = maxfr;
+maxfr = prctile(fr,99); %99 percentile tile of firing rate
+fr(fr > maxfr) = maxfr; %so doesn't screw up fitting of low firing rate data
 
 %---Define Place Field using Kmeans Clustering---%
 sil = zeros(1,3); %determines the number of clusters by comparing the ratio
@@ -48,7 +49,8 @@ place_field_matrix(firing_ind) = 1;
 area = sum(sum(place_field_matrix));
 %clean up place field matrix with missing pixels should not affect analysis
 %since missing pixels occur when no eye data but will improve estimate of
-%area/size of field
+%area/size of field and may help with sequence task analysis if item falls
+%on missing spot
 if area < 0.66*numel(place_field_matrix) %will not work well for very large field
     %---Fill in Holes due to low coverage---%
     %do upper left first
