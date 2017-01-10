@@ -10,7 +10,7 @@ clar
 % parpool
 task = 'ListSQ';
 set(0,'DefaultFigureVisible','OFF');
-for monkey = 2:-1:1%1:2
+for monkey = 1%2:-1:1%1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
