@@ -68,7 +68,7 @@ for monk = 2:-1:1
         end
         
         num_trials = length(cfg.trl);
-        valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks);
+        valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks,'ListSQ');
         if all(isnan(valid_trials(1,:)))
             continue
         end
@@ -88,8 +88,7 @@ for monk = 2:-1:1
 
         for unit = 1:num_units
             if (spatial_info.shuffled_rate_prctile(unit) > 95) ... %skagg 95%+
-                && (spatial_info.spatialstability_even_odd_prctile(2,unit) > 95) ... %spatial consistency 95%+
-                && (spatial_info.spatialstability_halves_prctile(2,unit) > 95) %spatial stability 95%+
+                && (spatial_info.spatialstability_halves_prctile(unit) > 95) %spatial stability 95%+
                 monkey_count(monk) = monkey_count(monk)+1;
                 
                 spike_times_outside = [];

@@ -32,7 +32,7 @@ trial_end_code = 20;
 imgon_code = 23;
 imgoff_code = 24;
 smval = 30 ;%gaussian 1/2 width for smoothing, for the moment want to smooth at high frequency modulations
-numshuffs = 1000; %recommend this is between 100 & 1000, for bootstrapping to
+numshuffs = 0; %recommend this is between 100 & 1000, for bootstrapping to
 % dtermine significance
 info_type = 'temporal';
 min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
@@ -271,10 +271,10 @@ for unit = 1:num_units
         info = saccade_information{unit}((saccade_information{unit}(:,4) > image_on_twin),:);
         saccade_firing = saccade_locked_firing{unit}(saccade_information{unit}(:,4) > image_on_twin,:);
         
-        %remove trials without spikes, used for shuffling anlaysis above
-        saccade_firing_plus = saccade_firing;
-        saccade_firing_plus(nansum(saccade_firing,2) == 0,:) = [];
-        
+%         %remove trials without spikes, used for shuffling anlaysis above
+%         saccade_firing_plus = saccade_firing;
+%         saccade_firing_plus(nansum(saccade_firing,2) == 0,:) = [];
+%         
         %want to look only looking at window around saccade/fixation
         limited_firing = NaN(size(saccade_firing));
         info(info(:,7) > twin2,7) = twin2; %if next fixation duration is > twin set to twin
@@ -289,9 +289,9 @@ for unit = 1:num_units
         %plot firing rate curve over time
         hold on
         subplot(3,3,1)
-        dofill(t,saccade_firing_plus(2:2:end,:),'blue',1,smval);%even trials
-        dofill(t,saccade_firing_plus(1:2:end,:),'red',1,smval);%odd trials
-        dofill(t,saccade_firing_plus,'black',1,smval); %all trials with spikes
+        dofill(t,saccade_firing(2:2:end,:),'blue',1,smval);%even trials
+        dofill(t,saccade_firing(1:2:end,:),'red',1,smval);%odd trials
+        dofill(t,saccade_firing,'black',1,smval); %all trials with spikes
         yl = ylim;
         if yl(1) < 0;
             yl(1) =0;
@@ -315,7 +315,7 @@ for unit = 1:num_units
         
         %plot raster over time by saccade occurence with session
         subplot(3,3,2)
-        [trial,time] = find(saccade_firing_plus == 1);
+        [trial,time] = find(saccade_firing == 1);
         plot(time-twin1,(trial),'.k')
         ylim([0 max(trial)])
         ylabel('Occurence #')
@@ -325,31 +325,33 @@ for unit = 1:num_units
         
         %plot firing rate curve over time for spikes limited time period of 1 fixation around saccade
         num_not_nans = sum(~isnan(limited_firing));%will be fewer sikes
-        not_enough_samples = find(num_not_nans < .5*size(limited_firing,1)); %median duration
-%         limited_firing(:,not_enough_samples) = NaN;  %remove any time points with less than 1/4 of the samples on avg ~< 500 trials
-%         [firing_rate,~]= nandens2(limited_firing,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-%         firing_rate(not_enough_samples) = NaN;  %remove any time points with less than 1/4 of the samples on avg ~< 500 trials
-        limited_firing_rate = nandens3(limited_firing,smval,Fs);
-
+        not_enough_samples = find(num_not_nans < 100);%.5*size(limited_firing,1)); %median duration
+        %         limited_firing(:,not_enough_samples) = NaN;  %remove any time points with less than 1/4 of the samples on avg ~< 500 trials
+        %         [firing_rate,~]= nandens2(limited_firing,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
+        %         firing_rate(not_enough_samples) = NaN;  %remove any time points with less than 1/4 of the samples on avg ~< 500 trials
+        [~,limited_firing_rate] = nandens3(limited_firing,smval,Fs);
+        limited_firing_rate(:,not_enough_samples) = NaN;
         
-        subplot(3,3,4)
-        plot(t,limited_firing_rate,'k');
-        hold on
-        yl = ylim;
-        if yl(1) < 0;
-            yl(1) =0;
+        if sum(sum(isnan(limited_firing_rate))) ~= numel(limited_firing_rate)
+            subplot(3,3,4)
+            dofill2(t,limited_firing_rate,'black',1,smval);
+            hold on
+            yl = ylim;
+            if yl(1) < 0;
+                yl(1) =0;
+            end
+            plot([0 0],[yl(1) yl(2)],'k--')
+            hold off
+            xlim([-twin1 twin2])
+            ylim(yl);
+            ylabel('Firing Rate (Hz)')
+            xlabel('Time from Saccade Start')
+            set(gca,'Xtick',[-100 0 100 200 300 400])
+            set(gca,'XMinorTick','on','YMinorTick','on')
+            grid on
+            ylim(yl);
+            title('Firing Rate: 1 fixation & 1 saccade before')
         end
-        plot([0 0],[yl(1) yl(2)],'k--')
-        hold off
-        xlim([-twin1 twin2])
-        ylim(yl);
-        ylabel('Firing Rate (Hz)')
-        xlabel('Time from Saccade Start')
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        set(gca,'XMinorTick','on','YMinorTick','on')
-        grid on
-        ylim(yl);
-        title('Firing Rate: 1 fixation & 1 saccade before')
         
         %make raster plot for spikes limited time period of 1 fixation around saccade
         subplot(3,3,5)
@@ -438,7 +440,7 @@ for unit = 1:num_units
     end
 end
 
-save([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat'],...
+save([data_dir task_file(1:8) '-Eyemovement_Locked_List_Saccade_results.mat'],...
     'twin1','twin2','image_on_twin','smval','saccade_locked_firing',...
     'saccade_information','temporal_info','unit_names');
 end
