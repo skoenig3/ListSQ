@@ -1,6 +1,5 @@
 function List_Fixation_Analysis(data_dir,figure_dir,session_data)
-% modified from Finalish Version of List_Fixation_AnalysisV2 to only look at
-% fixation aligned data instead of Fixation aligned.
+% Code only looks at fixation aligned data instead of saccade aligned.
 %
 % Function analyizes spike times correlated with eye movements in the
 % List image portion of the ListSQ task.
@@ -12,32 +11,30 @@ function List_Fixation_Analysis(data_dir,figure_dir,session_data)
 %
 % Outputs:
 %   1) Saves figures to figure_dir
-%   2) Saves processed data to data_dir tagged with '-Eyemovement_Locked_List_results'
+%   2) Saves processed data to data_dir tagged with '-Eyemovement_Locked_List_results.mat'
+%
+% Code rechecked for bugs on January 10-11,2017 SDK
 
 figure_dir = [figure_dir 'List Fixation Analysis\'];
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Set important Analysis parameters---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%looking at all potential visual place cells has mean delay to peak of ~150 ms
-%with very few happening befre fixation (so start of Fixation) and ending by 400 ms for sure
 twin1 = 200;% how much time to take before eye movement starts, in case neurons are encoding upcomming eye movement
 twin2 = 400;%how much time to take after eye movement has started
 image_on_twin = 500;%how much time to ignore eye movements for to remove strong visual response though some may last longer
-trial_start_code = 15;
+trial_start_code = 15; %start of ITI/trial
 trial_end_code = 20;
-imgon_code = 23;
-imgoff_code = 24;
-smval = 30 ;%gaussian 1/2 width for smoothing, for the moment want to smooth at high frequency modulations
-numshuffs = 1000; %recommend this is between 100 & 1000, for bootstrapping to
-% dtermine significance
+imgon_code = 23; %image turned on
+imgoff_code = 24; %image turned off
+smval = 30 ;%15 ms std, want to smooth at high frequency modulations
+numshuffs = 1000; %recommend this is between 100 & 1000, for bootstrapping to determine significance
 info_type = 'temporal';
-% info_type2 = 'temporal_eye';
 min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
 
-min_fix_dur = 100; %100 ms %don't want fixations that are too short since won't get a good idea of firing pattern
-min_sac_amp = 48;%48 pixels = 2 dva don't want mini/micro Fixations too small and hard to detect
-min_num_fix = 250; %at least 250 fixatoins with a certain dureation to analyze
+min_fix_dur = 100; %100 ms, don't want fixations that are too short since won't get a good idea of firing pattern
+min_sac_amp = 48;%48 pixels = 2 dva, don't want mini/micro saccades too small and hard to detect
+min_num_fix = 250; %at least 250 fixatoins with a certain duration to analyze for time limited to fixation duration
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Load important Session Data and Information---%%%
@@ -61,7 +58,7 @@ if num_units == 0
     return %since no units skip analysis
 end
 
-%---determine number of blocks unit was stable for
+%---determine number of blocks unit was stable for---%
 %remove units with too few trials
 %these are the absolute minimum data required to do data analysis
 valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks,task);
@@ -89,9 +86,8 @@ disp([task_file ': running Fixation modulation anlaysis..'])
 
 
 %preallocate space and parallel structure of cfg
-num_trials = length(cfg.trl);
-image_trials = zeros(1,num_trials);
-original_trial_num = zeros(1,num_trials);
+num_trials = length(cfg.trl); %total number of trials
+image_trials = zeros(1,num_trials); %image trials only
 for t = 1:num_trials %only take trials in which image was actually shown
     if any(cfg.trl(t).allval == 23) && itmlist(cfg.trl(t).cnd-1000) > sequence_items(end);
         image_trials(t) = 1;
@@ -100,35 +96,37 @@ end
 
 %remove excess data associated with non image trials
 image_trials = find(image_trials);
-num_trials = length(image_trials);
+num_trials = length(image_trials); %total number of image trials
+fixationstats = fixationstats(image_trials); %only take the eye data from successful trials
 
-%only take the eye data from successful trials
-fixationstats = fixationstats(image_trials);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Process eye data locked to Eye Movements---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%trial #, when did eye movement start within trial, ordinal #, eye movement start relative to image onset
-fixation_info = NaN(10,25*length(fixationstats));
+fixation_info = NaN(9,25*length(fixationstats));
+%1) trial #
+%2) %fixation start time from trial start
+%3) ordinal fixation #
+%4) fixation start relative to image onset
+%5) fixation duration
+%6) preceeding saccade amplitude
+%7) preceeding saccade duration
+%8) preceeding saccade direction 
+%9) image novel/repeat
 
-spike_times = cell(1,num_units);%image onset aligned data
-for unit = 1:num_units
-    spike_times{unit} = NaN(num_trials,imgdur*1.5);
-end
-
-fix_ind = 1;
+fix_ind = 1; %start fixation index @ 1
 for t = 1:num_trials %will use all trials since may be useful to look at eye movements later for all trials
-    fixationtimes = fixationstats{t}.fixationtimes;
-    saccadetimes = fixationstats{t}.saccadetimes;
-    xy = fixationstats{t}.XY;
+    fixationtimes = fixationstats{t}.fixationtimes; %start and end times of fixations 
+    saccadetimes = fixationstats{t}.saccadetimes; % start and end times of saccades
+    xy = fixationstats{t}.XY; %x and y eye data 
     
-    trial_start = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == trial_start_code);
-    trial_end = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == trial_end_code);
-    imgon = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == imgon_code)-trial_start;
-    imgoff = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == imgoff_code)-trial_start;
+    trial_start = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == trial_start_code); %time at start of trial 
+    trial_end = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == trial_end_code);%time at end of trial
+    imgon = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == imgon_code)-trial_start; %time of image on relative to start of trial
+    imgoff = cfg.trl(image_trials(t)).alltim(cfg.trl(image_trials(t)).allval == imgoff_code)-trial_start; %time of image off relative to start of trial
     nvr = novel_vs_repeat(img_cnd == cfg.trl(image_trials(t)).cnd); %novel or repeat image
     
-    if any(isnan(nvr))%presentation error so skip trial, see get_image_numbers.m
+    if any(isnan(nvr))%cortex presentation error so skip trial, see get_image_numbers.m
         continue
     end
     
@@ -138,56 +136,44 @@ for t = 1:num_trials %will use all trials since may be useful to look at eye mov
         imgoff = imgon+1.5*imgdur-1;
     end
     
-    %find fiations and Fixations that did not occur during the image period;
+    %find fixations and saccades that did not occur during the image period;
     %should also take care of the 1st fixation on the crosshair
     
     %fixation started before image turned on
     invalid= find(fixationtimes(1,:) < imgon);
     fixationtimes(:,invalid) = [];
     
-    %fixation started after the image turned off and/or firing rate could corrupted by image turning off
+    %fixation ended after the image turned off so firing rate could corrupted by image turning off
     invalid= find(fixationtimes(2,:) > imgoff);
     fixationtimes(:,invalid) = [];
     
-    %Fixation started before image turned on
+    %saccade started before image turned on
     invalid= find(saccadetimes(1,:) < imgon);
     saccadetimes(:,invalid) = [];
     
-    %Fixation started after the image turned off and/or firing rate could corrupted by image turning off
+    %Saccaded ended after the image turned off so firing rate could corrupted by image turning off
     invalid= find(saccadetimes(2,:) > imgoff);
     saccadetimes(:,invalid) = [];
-    
-    for unit = 1:num_units
-        if image_trials(t) >= valid_trials(1,unit) && image_trials(t) <= valid_trials(2,unit) %only valid trials
-            spikes = find(data(unit).values{image_trials(t)});
-            temp = zeros(1,imgoff-imgon+1);
-            spikes(spikes <= imgon) = [];
-            spikes(spikes > imgoff) = [];
-            spikes = spikes-imgon;
-            temp(spikes) = 1;
-            spike_times{unit}(t,1:length(temp)) = temp;
-        end
-    end
     
     for f = 1:size(fixationtimes,2);
         prior_sac = find(fixationtimes(1,f) == saccadetimes(2,:)+1);%next fixation should start immediately after
         if isempty(prior_sac) %trial ended or eye outside of image
             continue %try next one
         end
-        sacamp = sqrt(sum((xy(:,saccadetimes(2,prior_sac))-xy(:,saccadetimes(1,prior_sac))).^2)); %Fixation amplitude
-        fix_dur = fixationtimes(2,f)-fixationtimes(1,f)+1;%next fixation duration
+        sacamp = sqrt(sum((xy(:,saccadetimes(2,prior_sac))-xy(:,saccadetimes(1,prior_sac))).^2)); %saccade amplitude
+        fix_dur = fixationtimes(2,f)-fixationtimes(1,f)+1;%this fixation duration
         if sacamp >= min_sac_amp && fix_dur >= min_fix_dur %next fixation has to be long enough & Fixation large enough
             fixation_info(1,fix_ind) = t; %trial #
             fixation_info(2,fix_ind) = fixationtimes(1,f); %fixation start time from trial start
             fixation_info(3,fix_ind) = f; %ordinal fixation #
             fixation_info(4,fix_ind) = fixationtimes(1,f)-imgon; %fixation start relative to image onset
-            fixation_info(5,fix_ind) = fix_dur;%duration of fixation
-            fixation_info(6,fix_ind) = sacamp; %Fixation amplitude
-            fixation_info(7,fix_ind) = saccadetimes(2,prior_sac)-saccadetimes(1,prior_sac)+1;%Saccade duration to know how far to go back
+            fixation_info(5,fix_ind) = fix_dur;%duration of this fixation
+            fixation_info(6,fix_ind) = sacamp; %preceeding saccade's amplitude
+            fixation_info(7,fix_ind) = saccadetimes(2,prior_sac)-saccadetimes(1,prior_sac)+1;%preceediing saccade's duration to know how far to go back
             fixation_info(8,fix_ind) = atan2d(xy(2,saccadetimes(2,prior_sac))-xy(2,saccadetimes(1,prior_sac)),...
-                xy(1,saccadetimes(2,prior_sac))-xy(1,saccadetimes(1,prior_sac)));%Fixation_direction
+                xy(1,saccadetimes(2,prior_sac))-xy(1,saccadetimes(1,prior_sac)));%saccade direction
             fixation_info(9,fix_ind) = nvr; %novel vs repeat images
-            fix_ind = fix_ind+1;
+            fix_ind = fix_ind+1; %add index +1 
         end
     end
 end
@@ -200,29 +186,29 @@ fixation_info = laundry(fixation_info);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %pre-allocate space for variables
-fixation_locked_firing = cell(1,num_units); %firing rate locked to Fixation
+fixation_locked_firing = cell(1,num_units); %firing rate locked to fixation
 fixation_information = cell(1,num_units); %start time relative to image onset and ordinal #
 for unit = 1:num_units
     fixation_locked_firing{unit}= NaN(size(fixation_info,2),twin1+twin2);
-    fixation_information{unit} = NaN(size(fixation_info,2),9);
+    fixation_information{unit} = NaN(size(fixation_info,2),9); %going to organize by unit so parallels with spike structure
 end
 
-fix_ind = ones(1,num_units);
+fix_ind = ones(1,num_units); %fixation index # by unit since may have different trial counts
 for trial = 1:num_trials
     for unit = 1:num_units;
         if image_trials(trial) >= valid_trials(1,unit) && image_trials(trial) <= valid_trials(2,unit) %only valid trials
-            fixations = find(fixation_info(1,:) == trial);
-            spikes = find(data(unit).values{image_trials(trial)});
+            fixations = find(fixation_info(1,:) == trial); %fixations for this trial 
+            spikes = find(data(unit).values{image_trials(trial)}); %spikes for this trail
             
-            %collect spike times relative to Fixation start
+            %collect spike times relative to fixation start
             for f = 1:length(fixations);
-                fixt = fixation_info(2,fixations(f));
-                sac_spikes = spikes(spikes > fixt-twin1 & spikes <= fixt+twin2)-fixt+twin1;
-                temp = zeros(1,twin1+twin2);
-                temp(sac_spikes) = 1;
+                fixt = fixation_info(2,fixations(f)); %fixation start relative to trial start
+                fix_spikes = spikes(spikes > fixt-twin1 & spikes <= fixt+twin2)-fixt+twin1; %spikes -twin1:twin2 around fixation
+                temp = zeros(1,twin1+twin2); %zeros to put spikes in
+                temp(fix_spikes) = 1;%1 when spike occured
                 fixation_locked_firing{unit}(fix_ind(unit),:) = temp;
                 fixation_information{unit}(fix_ind(unit),:) = fixation_info(:,fixations(f))';
-                fix_ind(unit) = fix_ind(unit)+1;
+                fix_ind(unit) = fix_ind(unit)+1; %+1 to index for that unit
             end
         end
     end
@@ -239,17 +225,9 @@ temporal_info.fixation.rate = NaN(1,num_units);
 temporal_info.fixation.shuffled_rate = cell(1,num_units);
 temporal_info.fixation.shuffled_rate_prctile = NaN(1,num_units);
 temporal_info.fixation.temporalstability = NaN(2,num_units);  %row 1 by half, row 2 even/odd trials
-temporal_info.fixation.shuffled_temporalstability =cell(1,num_units);
+temporal_info.fixation.shuffled_temporalstability = cell(1,num_units);
 temporal_info.fixation.shuffled_temporalstability_prctile = NaN(2,num_units);%row 1 by half, row 2 even/odd trials
 
-%for limited time period of ~1 saccade+ ~1 fixation
-temporal_info_limited.fixation = [];
-temporal_info_limited.fixation.rate = NaN(1,num_units);
-temporal_info_limited.fixation.shuffled_rate = cell(1,num_units);
-temporal_info_limited.fixation.shuffled_rate_prctile = NaN(1,num_units);
-temporal_info_limited.fixation.temporalstability = NaN(2,num_units);  %row 1 by half, row 2 even/odd trials
-temporal_info_limited.fixation.shuffled_temporalstability =cell(1,num_units);
-temporal_info_limited.fixation.shuffled_temporalstability_prctile = NaN(2,num_units);%row 1 by half, row 2 even/odd trials
 for unit = 1:num_units
     if ~isempty(fixation_locked_firing{unit})
         
@@ -258,115 +236,23 @@ for unit = 1:num_units
         
         %since many units appear sparse especially spatial ones want to
         %run on eye movemetns that actually have spikes so use these only
-        %doesn't change statistics just decreases run time
-        fixation_firing(nansum(fixation_firing,2) == 0,:) = [];%remove Fixations without spikes
+        %doesn't change statistics (only scale firing rates) just decreases run time
+        fixation_firing(nansum(fixation_firing,2) == 0,:) = [];%remove fixations without spikes
         
         [observed_info_rate,shuffled_info_rate]...
             = estimated_mutual_information(fixation_firing,numshuffs,info_type,smval,Fs);
-        temporal_info.fixation.rate(unit) = observed_info_rate.skaggs;
-        temporal_info.fixation_shuffled_info.rate{unit} = shuffled_info_rate.skaggs;
+        temporal_info.fixation.rate(unit) = observed_info_rate.skaggs; %skaggs information score
+        temporal_info.fixation.shuffled_rate{unit} = shuffled_info_rate.skaggs; %shuffled skaggs information score
         temporal_info.fixation.shuffled_rate_prctile(unit) = 100*sum(...
-            observed_info_rate.skaggs > shuffled_info_rate.skaggs)/numshuffs;
-        temporal_info.fixation.temporalstability(:,unit) = observed_info_rate.temporalstability;
-        temporal_info.fixation_shuffled_info.temporalstability{unit} = shuffled_info_rate.temporalstability;
+            observed_info_rate.skaggs > shuffled_info_rate.skaggs)/numshuffs; %observed skaggs information score shuffled percentile
+        temporal_info.fixation.temporalstability(:,unit) = observed_info_rate.temporalstability;%temporal correlation: half,even/odd
+        temporal_info.fixation.shuffled_temporalstability{unit} = shuffled_info_rate.temporalstability; %shuffled temporal correlation
         temporal_info.fixation.shuffled_temporalstability_prctile(1,unit) = ...
             100*sum(observed_info_rate.temporalstability(1) > ...
-            shuffled_info_rate.temporalstability(1,:))/numshuffs;
+            shuffled_info_rate.temporalstability(1,:))/numshuffs; %temporal correlation half shuffled percentile
         temporal_info.fixation.shuffled_temporalstability_prctile(2,unit) = ...
             100*sum(observed_info_rate.temporalstability(2) > ...
-            shuffled_info_rate.temporalstability(2,:))/numshuffs;
-        
-        %---limited to 1 eye movement---%
-        fix_times = NaN(size(fixation_info,2),twin1+twin2);
-        for f = 1:size(fixation_info,2)
-            if fixation_info(4,f) > image_on_twin
-                ind = fixation_info(4,f)- fixation_info(7,f): fixation_info(4,f)+ fixation_info(5,f);
-                ind(ind < 1) = [];
-                spikes = spike_times{unit}(fixation_info(1,f),ind);
-                ind = ind-fixation_info(4,f);
-                spikes(ind < -45) = [];
-                ind(ind < -45) = [];
-                spikes(ind > twin2) = [];
-                ind(ind > twin2) = [];
-                if length(ind) < 100
-                    disp('what')
-                end
-                if any(isnan(spikes))
-                    error('WTF')
-                end
-                fix_times(f,ind+twin1) = spikes;
-            end
-        end
-        fix_times = laundry(fix_times,1);
-        n_trials = floor(size(fix_times,1)/2);
-        fix1 = fix_times(1:n_trials,:);
-        fix2 = fix_times(n_trials+1:end,:);
-        num_not_nans1 = sum(~isnan(fix1),1);%will be fewer sikes
-        num_not_nans1 = num_not_nans1 < min_num_fix;%.5*size(limited_firing,1)); %median duration
-        num_not_nans2 = sum(~isnan(fix2),1);%will be fewer sikes
-        num_not_nans2 = num_not_nans2 < min_num_fix;%.5*size(limited_firing,1)); %median duration
-        num_not_nans = find(num_not_nans1 | num_not_nans2);
-        num_not_nans = unique([1:twin1-45 num_not_nans]);
-        lmfr1 = nandens3(fix1,smval,Fs);
-        lmfr2 = nandens3(fix2,smval,Fs);
-        lmfr1(num_not_nans) = [];
-        lmfr2(num_not_nans) = [];
-        temporal_info_limited.fixation.temporalstability(1,unit) = ...
-            corr(lmfr1(:),lmfr2(:),'row','pairwise','type','Spearman');
-        
-        lmfr = nandens3(fix_times,smval,Fs);
-        lmfr(num_not_nans) = [];
-        total_time = 1:length(lmfr);
-        p_x = total_time/sum(total_time);
-        lambda = nansum(nansum(lmfr.*p_x));
-        temporal_info_limited.fixation.rate(unit) = p_log_p(lambda,lmfr,p_x);
-        
-        
-        shuffled_corrs = NaN(1,numshuffs);
-        shuffled_rate = NaN(1,numshuffs);
-        parfor shuff = 1:numshuffs
-            shuffled_spike_times  = circshift_row_long(spike_times{unit});
-            
-            fix_times_shuff = NaN(size(fixation_info,2),twin1+twin2);
-            for f = 1:size(fixation_info,2)
-                if fixation_info(4,f) > image_on_twin
-                    ind = fixation_info(4,f)- fixation_info(7,f): fixation_info(4,f)+ fixation_info(5,f);
-                    ind(ind < 1) = [];
-                    spikes =  shuffled_spike_times(fixation_info(1,f),ind);
-                    ind = ind-fixation_info(4,f);
-                    spikes(ind <= -twin1) = [];
-                    ind(ind <= -twin1) = [];
-                    spikes(ind > twin2) = [];
-                    ind(ind > twin2) = [];
-                    if any(isnan(spikes))
-                        error('WTF')
-                    end
-                    fix_times_shuff(f,ind+twin1) = spikes;
-                end
-            end
-            fix_times_shuff = laundry(fix_times_shuff,1);
-            n_trials = floor(size(fix_times_shuff,1)/2);
-            fix1 = fix_times_shuff(1:n_trials,:);
-            fix2 = fix_times_shuff(n_trials+1:end,:);
-            lmfr1 = nandens3(fix1,smval,Fs);
-            lmfr2 = nandens3(fix2,smval,Fs);
-            lmfr1(num_not_nans) = [];
-            lmfr2(num_not_nans) = [];
-            shuffled_corrs(shuff) = corr(lmfr1(:),lmfr2(:),'row','pairwise','type','Spearman');
-            
-            lmfr = nandens3(fix_times_shuff,smval,Fs);
-            lmfr(num_not_nans) = [];
-            lambda = nansum(nansum(lmfr.*p_x));
-            shuffled_rate(shuff) = p_log_p(lambda,lmfr,p_x);
-        end
-        temporal_info_limited.fixation_shuffled_info.temporalstability{unit} = shuffled_corrs;
-        temporal_info_limited.fixation.shuffled_temporalstability_prctile(1,unit) = ...
-            100*sum(temporal_info_limited.fixation.temporalstability(1,unit) > ...
-            shuffled_corrs)/numshuffs;
-        
-        temporal_info_limited.fixation.shuffled_rate{unit} = shuffled_rate;
-        temporal_info_limited.fixation.shuffled_rate_prctile(unit) = 100*sum(...
-            temporal_info_limited.fixation.rate(unit) > shuffled_rate)/numshuffs;
+            shuffled_info_rate.temporalstability(2,:))/numshuffs;%temporal correlation even/odd shuffled percentile
     end
 end
 
@@ -379,33 +265,34 @@ for unit = 1:num_units
     if ~isempty(fixation_locked_firing{unit})
         
         %---For Fixations---%
-        %ignore anything within 500 ms of image onset
-        info = fixation_information{unit}((fixation_information{unit}(:,4) > image_on_twin),:);
-        fixation_firing = fixation_locked_firing{unit}(fixation_information{unit}(:,4) > image_on_twin,:);
-        n_trials = round(size(fixation_firing,1)/2);
+         %don't want to run on trials with the first eye movements occuring
+         %with 500 (twin) ms of image onset since strong visual response in
+         %many neurons
+        info = fixation_information{unit}((fixation_information{unit}(:,4) > image_on_twin),:);  %fixation info for unit
+        fixation_firing = fixation_locked_firing{unit}(fixation_information{unit}(:,4) > image_on_twin,:); %spike times for unit
+        n_trials = round(size(fixation_firing,1)/2); %number of fixations
         
         
         figure
         
-        %plot firing rate curve over time
+        %---plot Fixation Aligned Firing Rate curve---%
         hold on
         subplot(3,3,1)
         dofill(t,fixation_firing(1:n_trials,:),'blue',1,smval);%even trials
         dofill(t,fixation_firing(n_trials+1:end,:),'red',1,smval);%odd trials
-        dofill(t,fixation_firing,'black',1,smval); %all trials with spikes
+        dofill(t,fixation_firing,'black',1,smval); %all trials
         yl = ylim;
         if yl(1) < 0;
             yl(1) =0;
         end
         plot([0 0],[yl(1) yl(2)],'k--')
-        xlim([-twin1 twin2])
         hold off
-        legend('1st 1/2','2nd 1/2','All','Location','Best')
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
+        legend('1^{st} 1/2','2^{nd} 1/2','All','Location','Best')
         ylim(yl);
         ylabel('Firing Rate (Hz)')
-        xlabel('Time from Fixation Start')
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        set(gca,'XMinorTick','on','YMinorTick','on')
+        xlabel('Time from Fixation Start (ms)')
         grid on
         ylim(yl);
         title(['Bit ' num2str(temporal_info.fixation.shuffled_rate_prctile(unit),3) '% '...
@@ -414,40 +301,42 @@ for unit = 1:num_units
             '%) \rho_{e/o} = ' num2str(temporal_info.fixation.temporalstability(2,unit),2) ...
             ' (' num2str(temporal_info.fixation.shuffled_temporalstability_prctile(2,unit),3) '%)'])
         
-        %plot raster over time by Fixation occurence with session
-        subplot(3,3,2)
+        %---plot fixation aligned raster---%
+        subplot(3,3,4)
         [trial,time] = find(fixation_firing == 1);
         plot(time-twin1,(trial),'.k')
+        hold on
+        plot([0 0],[0 max(trial)],'r--')
+        hold off
         ylim([0 max(trial)])
         ylabel('Occurence #')
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        xlabel('Time from Fixation Start')
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
+        xlabel('Time from Fixation Start (ms)')
         title('Raster whole period')
+        box off        
         
+        %---Plot Fixation Aligned Firing Rate curve Limited to 1 fixation and saccade---%
         info(info(:,5) > twin2,5) = twin2; %set max fixation duration to <= twin2
-        info(info(:,7) >= twin1,7) = twin1-1; %if prior Saccade duration to <= twin1
+        info(info(:,7) >= twin1,7) = twin1-1; %set max prior saccade duration to <= twin1
         
         %want to look only looking at window around saccade/fixation
         limited_firing = NaN(size(fixation_firing));
-        info(info(:,5) > twin2,5) = twin2; %if next fixation duration is > twin set to twin !!!!!!!!!!!shouldn't this be 5?
         info(info(:,5) > twin2,5) = twin2; %if next fixation duration is > twin set to twin
         for f = 1:size(limited_firing,1)
             ind = twin1-info(f,7):twin1+info(f,5);
             limited_firing(f,ind) = fixation_firing(f,ind);
         end
         
-        %plot firing rate curve over time for spikes limited time period of 1 fixation around saccade
-        num_not_nans = sum(~isnan(limited_firing));%will be fewer sikes
+        %get firing rate curve limited to 1 fixation and saccade
+        num_not_nans = sum(~isnan(limited_firing));%will be fewer spikes
         not_enough_samples = find(num_not_nans < min_num_fix);%.5*size(limited_firing,1)); %median duration
-        %         limited_firing(:,not_enough_samples) = NaN;  %remove any time points with less than 1/4 of the samples on avg ~< 500 trials
-        %         [firing_rate,~]= nandens2(limited_firing,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-        %         firing_rate(not_enough_samples) = NaN;  %remove any time points with less than 1/4 of the samples on avg ~< 500 trials
         [~,limited_firing_rate] = nandens3(limited_firing,smval,Fs);
         limited_firing_rate(:,not_enough_samples) = NaN;
-        limited_firing_rate(:,1:twin1-45) = NaN; %don't want to go back more than medianish saccade duration
-        limited_firing(:,1:twin1-45) = NaN; %don't want to go back more than medianish saccade duration
+        limited_firing_rate(:,1:twin1-44) = NaN; %don't want to go back more than median saccade duration
+        limited_firing(:,1:twin1-44) = NaN; %don't want to go back more than median saccade duration
         
-        subplot(3,3,4)
+        subplot(3,3,2)
         plot(t,nanmean(limited_firing_rate),'k');
         hold on
         yl = ylim;
@@ -456,56 +345,67 @@ for unit = 1:num_units
         end
         plot([0 0],[yl(1) yl(2)],'k--')
         hold off
-        xlim([-twin1 twin2])
-        ylim(yl);
+        ylim(yl); %scale same as whole period firing rate
         ylabel('Firing Rate (Hz)')
-        xlabel('Time from Fixation Start')
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        set(gca,'XMinorTick','on','YMinorTick','on')
-        grid on
-        ylim(yl);
-        title(['1 Eye Movement, \rho_{1/2} = ' num2str(temporal_info_limited.fixation.temporalstability(1,unit),2) ...
-            ' (' num2str(temporal_info_limited.fixation.shuffled_temporalstability_prctile(1,unit),3) '%), ' ...
-            'Bit ' num2str(temporal_info_limited.fixation.shuffled_rate_prctile(unit),3) ' %'])
+        xlabel('Time from Fixation Start (ms)')
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
+        title('Firing Rate Curve: 1 Fixation/Saccade')
+        box off 
         
+        %---Plot Raster For Limited to 1 fixation and saccade---%
         fix_durs = info(:,5);
-        [~,sorted_fix_durs] = sort(fix_durs);
+        [~,sorted_fix_durs] = sort(fix_durs); %sort by increasing fixation duration
         %make raster plot for spikes limited time period of 1 fixation around Fixation
         lmf = limited_firing(sorted_fix_durs,:);
         subplot(3,3,5)
         [trial,time] = find(lmf == 1);
         plot(time-twin1,trial,'.k')
+        hold on
+        plot([0 0],[0 max(trial)],'r--')
+        hold off
         xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
         ylim([0 max(trial)])
         set(gca,'Xtick',[-100 0 100 200 300 400])
-        ylabel('Sorted by Fixation Duration')
-        xlabel('Time from Fixation Start')
+        ylabel('Sorted by Fixation Dur')
+        xlabel('Time from Fixation Start (ms)')
         title('Raster Limited to 1 Eye Movement')
+        box off 
         
         
-        %plot raster over time by spikes/Fixation epoch aka by average firing rate
+        %---plot raster sorted by spike count---%
         f1 = sum(fixation_firing,2);
         [~,fi] = sort(f1);
         [trial,time] = find(fixation_firing(fi,:) == 1);
         subplot(3,3,3)
         plot(time-twin1,(trial),'.k')
+        hold on
+        plot([0 0],[0 max(trial)],'r--')
+        hold off
         ylim([0 max(trial)])
-        set(gca,'Xtick',[-100 0 100 200 300 400])
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
         ylabel('Ranked Spike Count')
-        xlabel('Time from Fixation Start')
+        xlabel('Time from Fixation Start (ms)')
         title('For all Fixations including zero spike counts')
+        box off 
         
-        %plot raster over time by Fixation order within image presentation
+        %---plot raster over time by Fixation order within image presentation---%
         [~,fi] = sort(info(:,3));
         subplot(3,3,6)
         [trial,time] = find(fixation_firing(fi,:) == 1);
         plot(time-twin1,trial,'.k')
+        hold on
+        plot([0 0],[0 max(trial)],'r--')
         hold off
         ylim([0 max(trial)])
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        ylabel('Ranked Ordinal Fixation #')
-        xlabel('Time from Fixation Start')
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
+        ylabel('Ranked Ordinal Fix #')
+        xlabel('Time from Fixation Start (ms)')
         title('Discrete Time within Image Period')
+        box off 
         
         %         %plot raster by Fixation amplitude
         %         [~,fi] = sort(info(:,5));
@@ -516,10 +416,11 @@ for unit = 1:num_units
         %         ylim([0 max(trial)])
         %         set(gca,'Xtick',[-100 0 100 200 300 400])
         %         ylabel('Ranked Fixation Amplitude')
-        %         xlabel('Time from Fixation Start')
+        %         xlabel('Time from Fixation Start (ms)')
         %         title('Fixation Amplitude')
+        %           box off 
         
-        %plot raster by novel vs repeat
+        %---plot raster by novel vs repeat image presentations---%
         subplot(3,3,7)
         [trial,time] = find(fixation_firing(info(:,9) == 1,:) == 1);
         plot(time-twin1,trial,'.b')
@@ -532,28 +433,35 @@ for unit = 1:num_units
         [trial,time] = find(fixation_firing(info(:,9) == 2,:) == 1);
         trial= trial+b4;
         plot(time-twin1,trial,'.r')
-        hold off
         if ~isempty(trial)
             ylim([0 max(trial)])
+            plot([0 0],[0 max(trial)],'k--')
         end
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        ylabel('Ranked Fixation Duration')
-        xlabel('Time from Fixation Start')
-        title('Novel (blue) vs Repeat (Red)')
+        hold off
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
+        ylabel('Occurence #')
+        xlabel('Time from Fixation Start (ms)')
+        title('Novel (blue) vs Repeat (red)')
+        box off 
         
-        %plot raster by Saccade direction
+        %---Plot raster by Saccade direction---%
         [~,fi] = sort(info(:,8));
         subplot(3,3,8)
         [trial,time] = find(fixation_firing(fi,:) == 1);
         plot(time-twin1,trial,'.k')
+        hold on
+        plot([0 0],[0 max(trial)],'r--')
         hold off
         ylim([0 max(trial)])
-        set(gca,'Xtick',[-100 0 100 200 300 400])
-        ylabel('Ranked Saccade Direction')
-        xlabel('Time from Fixation Start')
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
+        ylabel('Ranked Sac. Direction')
+        xlabel('Time from Fixation Start (ms)')
         title('Saccade Direction')
+        box off
         
-        %plot raster by fixation duration
+        %---plot raster by fixation duration---%
         [~,fi] = sort(info(:,5));
         subplot(3,3,9)
         [trial,time] = find(fixation_firing(fi,:) == 1);
@@ -562,18 +470,21 @@ for unit = 1:num_units
         plot(time-twin1,trial,'.k')
         hold on
         plot(dur,1:length(fi),'r.')
+        plot([0 0],[0 max(trial)],'r--')
         hold off
         ylim([0 max(trial)])
-        set(gca,'Xtick',[-100 0 100 200 300 400])
+        xlim([-twin1 twin2])
+        set(gca,'Xtick',[-200 0 200 400])
         ylabel('Ranked Fixation Duration')
-        xlabel('Time from Fixation Start')
+        xlabel('Time from Fixation Start (ms)')
         title('Fixation Duration')
+        box off 
         
-        n_str = ['   n_{sac} =' num2str(size(fixation_locked_firing{1,unit},1))];
+        n_str = [' n_{fix} =' num2str(size(fixation_locked_firing{1,unit},1))];
         if multiunit(unit)
-            subtitle(['Fixation-Locked Multiunit ' unit_names{unit} n_str]);
+            subtitle(['Fixation-Algined Multiunit ' task_file(1:8) ' ' unit_names{unit} n_str]);
         else
-            subtitle(['Fixation-Locked ' unit_names{unit} n_str]);
+            subtitle(['Fixation-Aligned ' task_file(1:8) ' '  unit_names{unit} n_str]);
         end
         
         save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names{unit} 'Eye_Locked_analysis_Fixation_Rasters']);
@@ -582,13 +493,5 @@ end
 
 save([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat'],...
     'twin1','twin2','image_on_twin','smval','fixation_locked_firing',...
-    'fixation_information','temporal_info','unit_names','spike_times',...
-    'temporal_info_limited');
-end
-
-function [info] = p_log_p(lambda,lambda_x,p_x)
-%mutual info equation for Skagg Score
-%from Skaggs, McNaughton, and Gothard 1993
-plogp = lambda_x.*log2(lambda_x/lambda);
-info = nansum(nansum(plogp.*p_x)); %bits/second
+    'fixation_information','temporal_info','unit_names','image_trials','numshuffs');
 end

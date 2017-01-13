@@ -3,7 +3,7 @@
 %
 % code rechecked 1/9/2017 SDK
 
-clar
+clar %clear, clc
 task = 'ListSQ';
 ITIstart_code = 15; %start of ITI
 img_on_code= 23; %start of image presentation
@@ -129,18 +129,28 @@ for monkey = 1:2
                 sacdurs = diff(saccadetimes)+1; %calculate sacccade duration
                 saccade_durations{nvr,set}(which_image,1:size(saccadetimes,2)) = sacdurs;
                 
-                for f = 2:size(fixationtimes,2)%ignore first fixation not sure where it was/possibly contaminated anyway
-                    prior_sac = find(saccadetimes(2,:) == fixationtimes(1,f)-1);%next fixation should start immediately after
-                    if isempty(prior_sac) %no prior saccade so was proabbly looking off screen
-                        continue;
+                for f = 1:size(fixationtimes,2)%ignore first fixation not sure where it was/possibly contaminated anyway
+                    if f == 1
+                        sacamp = sqrt(sum((fixations(:,1)-[400;300]).^2));
+                        saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
+                    else
+                        prior_sac = find(saccadetimes(2,:) == fixationtimes(1,f)-1);%next fixation should start immediately after
+                        if isempty(prior_sac) %no prior saccade so was proabbly looking off screen
+                            continue;
+                        end
+                        sacamp = sqrt(sum((xy(:,saccadetimes(2,prior_sac))-xy(:,saccadetimes(1,prior_sac))).^2)); %saccade amplitude
+                        saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
                     end
-                    sacamp = sqrt(sum((xy(:,saccadetimes(2,prior_sac))-xy(:,saccadetimes(1,prior_sac))).^2)); %saccade amplitude
-                    saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
                 end
             end
         end
     end
 end
+
+%remove excess empty matrices
+saccade_durations (:,set:end) = [];
+fixation_durations(:,set:end) = [];
+saccade_amplitudes(:,set:end) = [];
 %% Fixuation Durations by Ordinal Fixation #
 all_fix_durs = []; %all fixaiton durations
 nov_fix_durs = NaN(size(fixation_durations,2),20); %median by set novel fixation durations
@@ -244,7 +254,7 @@ end
 p_wilx = signrank(median(nov_sac_amps),median(rep_sac_amps)); %Wilcoxon signed rank test for zero median between novel and repeated images
 %nonparametric, repeated measures (across multiple fixations), analysiss
 p_vals = [];
-for f = 2:size(nov_sac_amps,2)
+for f = 1:size(nov_sac_amps,2)
     [~,p_vals(f)] = ttest(nov_sac_amps(:,f),rep_sac_amps(:,f)); %paired ttest, not sure if really valid but easy to interpret
 end
 

@@ -30,6 +30,7 @@ function [observed_info_rate,shuffled_info_rate]= estimated_mutual_information(t
 %   containined numshuff worht of bootstrapped infomration rates
 %
 % Code rechecked ListSQ 'spatial' section for bugs October 18, 2016 SDK
+% Code rechecked 'temporal' section for bugs January 10-11, 2017 SDK
 
 if ~isempty(trial_data)
     switch info_type
@@ -42,7 +43,8 @@ if ~isempty(trial_data)
             %probability of time being observed at a given point across all
             %trials, not necessarily the same
             p_x = total_time/sum(total_time);
-            [lambda_x,~]= nandens(trial_data,smval,'gauss',Fs,'nanflt');%nandens made by nathan killian
+            [~,smoothed_firing]= nandens(trial_data,smval,'gauss',Fs,'nanflt');%nandens made by nathan killian
+            lambda_x = nanmean(smoothed_firing);
             lambda = nansum(nansum(lambda_x.*p_x));
             [ observed_info_rate.skaggs] = p_log_p(lambda,lambda_x,p_x);
             
@@ -52,10 +54,10 @@ if ~isempty(trial_data)
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%---Calculate the observed temporal stability---%%%
-            [lambda_x1,~]= nandens(trial_data(1:ntrials,:),smval,'gauss',Fs,'nanflt');%firing rate curve for first half
-            [lambda_x2,~]= nandens(trial_data(ntrials+1:end,:),smval,'gauss',Fs,'nanflt');%firing rate curve for second half
-            [lambda_xo,~]= nandens(trial_data(1:2:end,:),smval,'gauss',Fs,'nanflt');%odd trials
-            [lambda_xe,~]= nandens(trial_data(2:2:end,:),smval,'gauss',Fs,'nanflt');%even trials
+            lambda_x1 = nanmean(smoothed_firing(1:ntrials,:));%firing rate curve for first half
+            lambda_x2 = nanmean(smoothed_firing(ntrials+1:end,:));%firing rate curve for second half
+            lambda_xo = nanmean(smoothed_firing(1:2:end,:));%odd trials
+            lambda_xe = nanmean(smoothed_firing(2:2:end,:));%even trials
             observed_info_rate.temporalstability = [...
                 corr(lambda_x1(:),lambda_x2(:),'row','pairwise','type','Spearman');...
                 corr(lambda_xe(:),lambda_xo(:),'row','pairwise','type','Spearman')];
@@ -68,9 +70,10 @@ if ~isempty(trial_data)
                 skaggs = NaN(1,numshuffs);
                 temporalstability = NaN(2,numshuffs);
                 parfor shuffled = 1:numshuffs;
-                    shuffled_firing = circshift_row(trial_data);
+                    shuffled_firing = circshift_row(trial_data); %permutate spike trains relative to eye movements
+                    [~,shuffled_firing] = nandens(shuffled_firing,smval,'gauss',Fs,'nanflt');
                     
-                    [lambda_x,~]= nandens(shuffled_firing,smval,'gauss',Fs,'nanflt');
+                	lambda_x = nanmean(shuffled_firing);
                     lambda = nansum(nansum(lambda_x.*p_x));
                     skaggs(shuffled) = p_log_p(lambda,lambda_x,p_x);
                     
@@ -78,10 +81,10 @@ if ~isempty(trial_data)
                         disp('Error: Information should be greater than 0. WTF?')
                     end
                     
-                    [lambda_x1,~]= nandens(shuffled_firing(1:ntrials,:),smval,'gauss',Fs,'nanflt');%firing rate curve for first half
-                    [lambda_x2,~]= nandens(shuffled_firing(ntrials+1:end,:),smval,'gauss',Fs,'nanflt');%firing rate curve for second half
-                    [lambda_xe,~]= nandens(shuffled_firing(1:2:end,:),smval,'gauss',Fs,'nanflt');%odd trials
-                    [lambda_xo,~]= nandens(shuffled_firing(2:2:end,:),smval,'gauss',Fs,'nanflt');%even trials
+                    lambda_x1 = nanmean(shuffled_firing(1:ntrials,:));%firing rate curve for first half
+                    lambda_x2 = nanmean(shuffled_firing(ntrials+1:end,:));%firing rate curve for second half
+                    lambda_xo = nanmean(shuffled_firing(1:2:end,:));%odd trials
+                    lambda_xe = nanmean(shuffled_firing(2:2:end,:));%even trials
                     temporalstability(:,shuffled) =[...
                         corr(lambda_x1(:),lambda_x2(:),'row','pairwise','type','Spearman');...
                         corr(lambda_xe(:),lambda_xo(:),'row','pairwise','type','Spearman')];

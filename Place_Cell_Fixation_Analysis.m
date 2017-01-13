@@ -41,7 +41,7 @@ fixwin = 5;%size of fixation window on each crosshair
 smval = 30;%2*std of gaussian kernel so 15 ms standard deviation
 min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
 twin1 = 200;%200 ms before fixation
-twin2 = 400;%400 ms after start of fixation for list only
+twin2 = 400;%400 ms after start of fixation
 image_on_twin = 500;%how much time to ignore eye movements for to remove strong visual response though some may last longer
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -458,7 +458,7 @@ for unit = 1:num_units
         for g = 1:size(gaps,1)
             gp = gaps(g,:);
             gp(gp == 0) = [];
-            if length(gp) > smval
+            if length(gp) > 1.5*smval %3 standard deviations
                 h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
                     [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
                 uistack(h,'down')
@@ -521,8 +521,8 @@ for unit = 1:num_units
     if ~isempty(gaps)
         for g = 1:size(gaps,1)
             gp = gaps(g,:);
-            gp(gp == 0) = [];
-            if length(gp) > smval
+            gp(gp == 0) = []; 
+            if length(gp) > 1.5*smval %3 standard deviations
                 h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
                     [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
                 uistack(h,'down')
@@ -652,9 +652,9 @@ for unit = 1:num_units
         if successful_sequence_trials(trial) >= valid_trials(1,unit) && successful_sequence_trials(trial) <= valid_trials(2,unit)
             spikes = find(data(unit).values{successful_sequence_trials(trial)}); %trial spike trains
             for c = 1:4;
-                if time_to_fixation(trial,c) < predict_rt %remove predictive saccades for now
-                    continue
-                end
+                %                 if time_to_fixation(trial,c) < predict_rt %remove predictive saccades for now
+                %                     continue
+                %                 end
                 fixt = fixation_start_time(trial,c);
                 sact = saccade_start_time(trial,c);
                 
@@ -683,33 +683,44 @@ for unit = 1:num_units
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     %Determine if any of the items are inside the matrix or not?
-    sequence_inside = zeros(2,4);
+    sequence_inside = NaN(2,4);
     for c = 1:4
         for seq = 1:2
             yloc = imageY-sequence_locations{seq}(2,c);
             xloc = sequence_locations{seq}(1,c);
+            
+            %---Simple version...is item in or out of field---%
+            %             if place_field_matrix(yloc,xloc) == 1 %item is in field
+            %                 sequence_inside(seq,c) = 1;
+            %             elseif place_field_matrix(yloc,xloc) == 0 %item is out of the field
+            %                 sequence_inside(seq,c) = 0;
+            %             else %coverage unknown
+            %                 sequence_inside(seq,c) = NaN;
+            %             end
+            
+            %---Less Simple Version...is item on border of field---%
             if place_field_matrix(yloc,xloc) == 1 %item is in field
                 %then check if item is on border of field, if yes don't
                 %count. Check if field extends at least 2.5 dva, should be
                 %effected by coverage on edges items are at least 3.5 dva
                 %away from border of image
-                if place_field_matrix(yloc-24,xloc) == 1&& place_field_matrix(yloc-24,xloc-24) == 1 &&...
-                        place_field_matrix(yloc-24,xloc+24) == 1 && place_field_matrix(yloc+24,xloc) == 1 && ...
-                        place_field_matrix(yloc+24,xloc-24) == 1 && place_field_matrix(yloc+24,xloc+24) == 1 && ...
-                        place_field_matrix(yloc,xloc+24) == 1 && place_field_matrix(yloc,xloc-24) == 1
+                if place_field_matrix(yloc-12,xloc) == 1&& place_field_matrix(yloc-12,xloc-12) == 1 &&...
+                        place_field_matrix(yloc-12,xloc+12) == 1 && place_field_matrix(yloc+12,xloc) == 1 && ...
+                        place_field_matrix(yloc+12,xloc-12) == 1 && place_field_matrix(yloc+12,xloc+12) == 1 && ...
+                        place_field_matrix(yloc,xloc+12) == 1 && place_field_matrix(yloc,xloc-12) == 1
                     sequence_inside(seq,c) =1;
                 else
                     sequence_inside(seq,c) = NaN; %don't want to use border for any category
                 end
             else %check if item outside is also close to the border
-%                 if place_field_matrix(yloc-24,xloc) == 1 || place_field_matrix(yloc-24,xloc-24) == 1 ||...
-%                         place_field_matrix(yloc-24,xloc+24) == 1 || place_field_matrix(yloc+24,xloc) == 1 || ...
-%                         place_field_matrix(yloc+24,xloc-24) == 1 || place_field_matrix(yloc+24,xloc+24) == 1 || ...
-%                         place_field_matrix(yloc,xloc+24) == 1 || place_field_matrix(yloc,xloc-24) == 1
-%                     sequence_inside(seq,c) =NaN; %don't want to use border for any category
-%                 else
+                if place_field_matrix(yloc-12,xloc) == 1 || place_field_matrix(yloc-12,xloc-12) == 1 ||...
+                        place_field_matrix(yloc-12,xloc+12) == 1 || place_field_matrix(yloc+12,xloc) == 1 || ...
+                        place_field_matrix(yloc+12,xloc-12) == 1 || place_field_matrix(yloc+12,xloc+12) == 1 || ...
+                        place_field_matrix(yloc,xloc+12) == 1 || place_field_matrix(yloc,xloc-12) == 1
+                    sequence_inside(seq,c) =NaN; %don't want to use border for any category
+                else
                     sequence_inside(seq,c) = 0;
-%                 end
+                end
             end
         end
     end
@@ -801,7 +812,7 @@ for unit = 1:num_units
         end
         if (spatial_info.spatialstability_even_odd_prctile(1,unit) > 95)
             title_str = [title_str ' \\rho_{e/o} = ' num2str(spatial_info.spatialstability_even_odd(1,unit),2) ...
-                '(' num2str(spatial_info.spatialstability_even_odd_prctile(1,unit),3) '%%)'];  
+                '(' num2str(spatial_info.spatialstability_even_odd_prctile(1,unit),3) '%%)'];
         end
         title(sprintf(title_str));
         
@@ -816,7 +827,7 @@ for unit = 1:num_units
         end
         hold off
         xlim([0 800])
-        ylim([0 600])
+        ylim([0 240])
         axis equal
         axis off
         colormap(b,'gray')
@@ -861,7 +872,7 @@ for unit = 1:num_units
             for g = 1:size(gaps,1)
                 gp = gaps(g,:);
                 gp(gp == 0) = [];
-                if length(gp) > smval
+                if length(gp) > 1.5*smval
                     h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
                         [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
                     uistack(h,'down')
@@ -886,7 +897,7 @@ for unit = 1:num_units
             title(['Sequence Trials: No peak, max firing of ' num2str(max(seq_in_curve),3) 'Hz']);
         end
         hold off
- 
+        
         %---Plot Firing Rate Curves for Image Trials---%
         subplot(2,3,5)
         hold on
@@ -904,13 +915,13 @@ for unit = 1:num_units
             for g = 1:size(gaps,1)
                 gp = gaps(g,:);
                 gp(gp == 0) = [];
-                if length(gp) > smval
+                if length(gp) > 1.5*smval %3 standard deviations
                     h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
                         [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
                     uistack(h,'down')
                     set(h,'facealpha',.25,'EdgeColor','None')
                 else
-                      h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
+                    h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
                         [yl(1) yl(1) yl(2) yl(2) yl(1)],'g');
                     uistack(h,'down')
                     set(h,'facealpha',.25,'EdgeColor','None')
@@ -923,14 +934,14 @@ for unit = 1:num_units
         legend('out->in','in->in','Location','NorthWest')
         if ~isnan(stats_across_tasks(1,unit))
             plot(stats_across_tasks(1,unit)-twin1,stats_across_tasks(2,unit),'*k')
-            title(['Sequence Trials: peak of ' num2str(stats_across_tasks(2,unit),3) 'Hz @ ' ...
+            title(['Image Trials: peak of ' num2str(stats_across_tasks(2,unit),3) 'Hz @ ' ...
                 num2str(stats_across_tasks(1,unit)-twin1) ' ms']);
         else
             title(['Sequence Trials: No peak, max firing of ' num2str(max(list_in_curve),3) 'Hz']);
         end
         hold off
-
-         %---Plot Firing Rate Curves for Suquence vs Image Trials---%
+        
+        %---Plot Firing Rate Curves for Suquence vs Image Trials---%
         subplot(2,3,6)
         hold on
         dofill(t(1:twin1+twin2),list_fixation_locked_firing{unit}(in_out{unit} == 1,:),'black',1,smval);%list out-> in

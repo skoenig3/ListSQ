@@ -17,7 +17,7 @@ function place_field_matrix = define_place_field(firing_rate_map,imageX,imageY)
 %---Normalize to remove outliers at the very high end---%
 fr = firing_rate_map(:);
 fr(isnan(fr)) = [];
-maxfr = prctile(fr,95); %95 percentile tile of firing rate
+maxfr = prctile(fr,95); %95 percentile of firing rate
 fr(fr > maxfr) = maxfr; %so doesn't screw up fitting of low firing rate data
 
 %---Define Place Field using Kmeans Clustering---%

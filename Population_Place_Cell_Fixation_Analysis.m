@@ -135,6 +135,8 @@ for monk =2:-1:1
         for unit = 1:num_units
             if ~isempty(spatial_info.shuffled_info_rate{unit})&& length(spatial_info.shuffled_info_rate{unit}) < 1000
                 error('Should have 1000 shuffles') %make sure file has right number of shuffles
+            elseif isempty(spatial_info.shuffled_info_rate{unit})
+               continue  
             end
             
             if (spatial_info.shuffled_rate_prctile(unit) > 95) ... %skagg 95%+
@@ -201,7 +203,7 @@ for monk =2:-1:1
                     for g = 1:size(gaps,1)
                         gp = gaps(g,:);
                         gp(gp == 0) = [];
-                        if length(gp) > smval %2 standard deviation
+                        if length(gp) > 1.5*smval %2 standard deviation
                             pass = 1;
                             break
                         end
@@ -216,7 +218,7 @@ for monk =2:-1:1
                     for g = 1:size(gaps,1)
                         gp = gaps(g,:);
                         gp(gp == 0) = [];
-                        if length(gp) > smval %2 standard deviation
+                        if length(gp) > 1.5*smval %2 standard deviation
                             pass2 = 1;
                             break
                         end
@@ -267,7 +269,7 @@ for monk =2:-1:1
                             for g = 1:size(gaps_pos,1)
                                 gp = gaps_pos(g,:);
                                 gp(gp == 0) = [];
-                                if length(gp) < smval %2  standard deviation
+                                if length(gp) < 1.5*smval %3  standard deviations
                                     rmv = [rmv g];
                                 else
                                     total_pos = total_pos+length(gp);
@@ -287,7 +289,7 @@ for monk =2:-1:1
                             for g = 1:size(gaps_neg,1)
                                 gp = gaps_neg(g,:);
                                 gp(gp == 0) = [];
-                                if length(gp) < smval %2  standard deviation
+                                if length(gp) < 1.5*smval %3  standard deviations
                                     rmv = [rmv g]; %remove time points that are too short
                                 else
                                     total_neg = total_neg+length(gp);
@@ -300,8 +302,6 @@ for monk =2:-1:1
                         
                         if total_pos > 0 && total_neg == 0 %if only expected result
                             sig_p_seq = [sig_p_seq 1];
-                        elseif total_neg > 0 %if only negative result
-                            sig_p_seq = [sig_p_seq -1];
                         elseif total_pos == 0 && total_neg == 0 %no result
                             sig_p_seq = [sig_p_seq 0];
                         elseif total_pos > 0 && total_neg > 0 %need to probe further since mixed result
@@ -334,6 +334,8 @@ for monk =2:-1:1
                                 sig_p_seq = [sig_p_seq NaN];
                                 disp('unsure so removed')
                             end
+                        elseif total_neg > 0 %if only negative result
+                            sig_p_seq = [sig_p_seq -1];
                         else
                             error('What else could happen')
                         end
