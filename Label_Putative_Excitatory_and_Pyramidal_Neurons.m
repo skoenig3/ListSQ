@@ -27,7 +27,7 @@ for monkey = 1:2
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
     if monkey == 1%strcmpi(monkey,'Vivian')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
+        excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
         
@@ -38,7 +38,7 @@ for monkey = 1:2
         chamber_zero = [13.5 -11]; %AP ML
         
     elseif monkey ==2%strcmpi(monkey,'Tobii')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
+        excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Tobii\';
         excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
         
@@ -136,7 +136,7 @@ for monkey = 1:2
                     end
                 end
             end
-            excitatory_inhibitory
+            
             time_count = time_count/1000;
             mean_firing_rate =  spike_count/time_count;
             whole_session_mean_firing_rate(unit) = mean_firing_rate;
