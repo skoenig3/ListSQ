@@ -131,8 +131,8 @@ for unit = 1:num_units
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if isnan(spatial_info.shuffled_rate_prctile(unit))
         continue %spatial analysis wasn't run on this unit
-    elseif (spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.spatialstability_halves_prctile(unit) < 95)
-        continue %unit not spatial or correlated in any sense
+%     elseif (spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.spatialstability_halves_prctile(unit) < 95)
+%         continue %unit not spatial or correlated in any sense
     end
     
     
@@ -354,8 +354,10 @@ for unit = 1:num_units
     %find peaks that were in significant period and remove those that weren't
     rmv = [];
     for l = 1:length(LOCS);
-        if ~any(list_sig_ind{1,unit} == LOCS(l))
-            rmv = [rmv l];
+        if ~any(list_sig_ind{1,unit} == LOCS(l))%relaible during ?->in
+            if ~any(list_sig_ind{2,unit} == LOCS(l)) %relaible duringout->in
+                rmv = [rmv l];
+            end
         end
     end
     LOCS(rmv) = [];
@@ -701,9 +703,11 @@ for unit = 1:num_units
             %---Less Simple Version...is item on border of field---%
             if place_field_matrix(yloc,xloc) == 1 %item is in field
                 %then check if item is on border of field, if yes don't
-                %count. Check if field extends at least 2.5 dva, should be
+                %count. Check if field extends at least 0.5 dva, should be
                 %effected by coverage on edges items are at least 3.5 dva
-                %away from border of image
+                %away from border of image. Median eye tracking error (fixation accuracy) 
+                %on this task ~0.56 dva so should be ok with 0.5 and most
+                %fixations within 1 dva
                 if place_field_matrix(yloc-12,xloc) == 1&& place_field_matrix(yloc-12,xloc-12) == 1 &&...
                         place_field_matrix(yloc-12,xloc+12) == 1 && place_field_matrix(yloc+12,xloc) == 1 && ...
                         place_field_matrix(yloc+12,xloc-12) == 1 && place_field_matrix(yloc+12,xloc+12) == 1 && ...
