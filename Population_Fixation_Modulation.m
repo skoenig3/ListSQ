@@ -27,6 +27,7 @@ all_eye_cell_unit_names = {}; %eye modulated cell unit names
 all_eye_cell_monkeys = []; %1s and 2s
 eye_cell_AP_location = []; %AP location of recorded place cell
 eye_cell_place_cell_status = [];%whether unit is place cell or not, 1 for place, 0 for non-place
+eye_cell_direction_cell_status = []; %whether unit is directionally modulated or not, 1 for direction, 0 for non-direction
 
 %---Fixation Algined Firing Rate Curves---%
 avg_fixation_firing_rates = []; %significant firing rates
@@ -104,6 +105,7 @@ for monk = 2:-1:1
         load([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat']);
         
         %should also load direction modulation
+        load([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'])
         
         if smval ~= 30
             error('Smoothing Value (2xStd) does not match expectations!')
@@ -120,7 +122,7 @@ for monk = 2:-1:1
             elseif isempty(spatial_info.shuffled_info_rate{unit})
                 continue
             end
-
+            
             if (temporal_info.fixation.shuffled_temporalstability_prctile(1,unit) > 95) ... %significant stability
                     && (temporal_info.fixation.shuffled_rate_prctile(unit) > 95) % %skagg 95%+
                 
@@ -139,6 +141,12 @@ for monk = 2:-1:1
                     eye_cell_place_cell_status = [eye_cell_place_cell_status 0]; %non-place cell
                 end
                 
+                %is unit directionally modulated
+                if mrls.all_fixations_shuffled_prctile(unit) > 95
+                    eye_cell_direction_cell_status = [eye_cell_direction_cell_status 1];
+                else
+                    eye_cell_direction_cell_status = [eye_cell_direction_cell_status 0];
+                end
                 
                 %---Fixation Algined Firing Rate Curves---%
                 info = fixation_information{unit}((fixation_information{unit}(:,4) > image_on_twin),:); %fixaion info after image onset
@@ -176,7 +184,7 @@ for monk = 2:-1:1
                 limited_firing_rate = limited_firing_rate/nanmax(nanmax(limited_firing_rate)); %normalize by maximum firing rate
                 avg_fixation_firing_rates_limited = [avg_fixation_firing_rates_limited; limited_firing_rate];
                 
-
+                
             else
                 %---Misc Parameters---%
                 monkey_all_unit_count(2,monk) = monkey_all_unit_count(2,monk)+1; %unit count
@@ -196,14 +204,15 @@ end
 %%
 disp(['Found ' num2str(length(all_eye_cell_unit_names)) ' eye movement modulated neurons!'])
 disp([num2str(sum(eye_cell_place_cell_status == 1)) '/' num2str(length(all_eye_cell_unit_names)) ' are also place cells'])
-disp([num2str(sum(eye_cell_place_cell_status == 0)) '/' num2str(length(all_eye_cell_unit_names)) ' are non-spatial'])
+disp([num2str(sum(eye_cell_direction_cell_status == 1)) '/' num2str(length(all_eye_cell_unit_names)) ' are also saccade direction cells'])
+disp([num2str(sum(eye_cell_place_cell_status == 0 & eye_cell_direction_cell_status == 0)) '/' num2str(length(all_eye_cell_unit_names)) ' are non-spatial'])
 
 
 %---Copy Relevant Figures to Summary Directory---%
 % for unit = 1:length(all_eye_cell_unit_names)
-%     sub_dir1 = 'List Fixation Analysis\';    
+%     sub_dir1 = 'List Fixation Analysis\';
 %     name1 = [all_eye_cell_unit_names{unit} 'Eye_Locked_analysis_Fixation_Rasters.png'];
-%     
+%
 %     if eye_cell_place_cell_status(unit) == 1 %place cell
 %             copyfile([figure_dir{all_eye_cell_monkeys(unit)} sub_dir1 name1],...
 %             [summary_directory 'Place\' name1])

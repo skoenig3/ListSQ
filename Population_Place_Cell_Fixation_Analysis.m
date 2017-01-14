@@ -13,7 +13,7 @@
 clar %clear,clc
 
 %where to store spatial analysis figure copies
-summary_directory = 'C:\Users\seth.koenig\Desktop\All Significant Cells\Spatial Analysis\';
+summary_directory = 'C:\Users\seth.koenig\Desktop\Significant Units\Spatial Analysis\';
 if ~isdir(summary_directory)
     mkdir(summary_directory)
 end
@@ -30,6 +30,8 @@ all_multi_unit_count = zeros(1,2); %all_multi_unit_countunits
 all_place_cell_unit_names = {}; %place cell unit names
 all_place_cell_monkeys = []; %1s and 2s
 place_cell_AP_location = []; %AP location of recorded place cell
+n_in = []; %number of fixations ?->in
+n_out2in = [];%number of fixaitons out->in
 
 %---Spatial Correlation Values for all cells---%
 all_place_cell_spatial_corrs = []; %place cell spatial correlations
@@ -70,7 +72,7 @@ for monk =2:-1:1
         excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
-        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resored Figures\';
+        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
         
         %listsq_read_excel(data_dir,excel_file);
@@ -166,7 +168,10 @@ for monk =2:-1:1
                 
                 
                 %---Place Cell Firing Rate Curves for List---%
+                n_in = [n_in sum(in_out{unit} == 1 | in_out{unit} == 2)]; %number of fixations ?->in
+                n_out2in = [n_out2in sum(in_out{unit} == 1)];%number of fixaitons out->in
                 
+                            
                 %firing rate out-> in
                 firing_rate = list_fixation_locked_firing{unit}(in_out{unit} == 1,:); %get spike trains
                 in_curve = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
@@ -373,62 +378,45 @@ for i = 1:length(nans)
     disp(['Removing ' all_place_cell_unit_names{nans(i)}])
 end
 
-% %---Second Copy Relevant Figures to Summary Directory---%
-% for unit = 1:length(all_place_cell_unit_names)
-%     sub_dir1 = 'Place Cells Fixation Analysis\Best Place Cells Fixation Analysis\';
-%     sub_dir2 = 'Spatial Analysis\';
-%     
-%     name1 = [all_place_cell_unit_names{unit} '_place_cell_fixation_analysis.png'];
-%     name2 = [all_place_cell_unit_names{unit} '_place_cell_Sequence_InSideOutside.png'];
-%     name3 = [all_place_cell_unit_names{unit} '_List_spatial_analysis.png'];
-%     
-%     if sig_p_list(unit) == 0 %not reliable
-%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
-%             [summary_directory 'Not reliable\' name1])
-%         if ~isnan(sig_p_seq(unit))
-%             copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
-%                 [summary_directory 'Not reliable\' name2])
-%         end
-%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
-%             [summary_directory 'Not reliable\' name3])
-%     elseif isnan(all_list_peak_times(unit))%no peak in firing rate detected
-%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
-%             [summary_directory 'No peak\' name1])
-%         if ~isnan(sig_p_seq(unit))
-%             copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
-%                 [summary_directory 'No peak\' name2])
-%         end
-%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
-%             [summary_directory 'No peak\' name3])
-%     else %passes all criterion
-%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
-%             [summary_directory name1])
-%         if ~isnan(sig_p_seq(unit))
-%             copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
-%                 [summary_directory name2])
-%         end
-%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
-%             [summary_directory name3])
-%     end
-% end
+%---Second Copy Relevant Figures to Summary Directory---%
+for unit = 1:length(all_place_cell_unit_names)
+    sub_dir1 = 'Place Cells Fixation Analysis\Best Place Cells Fixation Analysis\';
+    sub_dir2 = 'Spatial Analysis\';
+    
+    name1 = [all_place_cell_unit_names{unit} '_place_cell_fixation_analysis.png'];
+    name2 = [all_place_cell_unit_names{unit} '_place_cell_Sequence_InSideOutside.png'];
+    name3 = [all_place_cell_unit_names{unit} '_List_spatial_analysis.png'];
+    
+    if sig_p_list(unit) == 0 %not reliable
+        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
+            [summary_directory 'Not reliable\' name1])
+        if ~isnan(sig_p_seq(unit))
+            copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
+                [summary_directory 'Not reliable\' name2])
+        end
+        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
+            [summary_directory 'Not reliable\' name3])
+    elseif isnan(all_list_peak_times(unit))%no peak in firing rate detected
+        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
+            [summary_directory 'No peak\' name1])
+        if ~isnan(sig_p_seq(unit))
+            copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
+                [summary_directory 'No peak\' name2])
+        end
+        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
+            [summary_directory 'No peak\' name3])
+    else %passes all criterion
+        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
+            [summary_directory name1])
+        if ~isnan(sig_p_seq(unit))
+            copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
+                [summary_directory name2])
+        end
+        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
+            [summary_directory name3])
+    end
+end
 %% Remove Un-Reliable Neurons and Neurons wthout a definitve peak in firing rate
-
-%remove neurons without a definitive peak
-all_in_rates(isnan(all_list_peak_times),:) = [];
-all_fixation_rates(isnan(all_list_peak_times),:) = [];
-all_out_rates(isnan(all_list_peak_times),:) = [];
-all_place_cell_unit_names(isnan(all_list_peak_times)) = [];
-coverage(isnan(all_list_peak_times)) = [];
-place_coverage(isnan(all_list_peak_times)) = [];
-place_field_area(isnan(all_list_peak_times)) = [];
-all_context_gain(isnan(all_list_peak_times)) = [];
-all_context_gain2(isnan(all_list_peak_times)) = [];
-all_peak_seq(isnan(all_list_peak_times)) = [];
-all_seq_peak_times(isnan(all_list_peak_times)) = [];
-sig_p_seq(isnan(all_list_peak_times)) = [];
-sig_p_list(isnan(all_list_peak_times)) = [];
-all_peak_list(isnan(all_list_peak_times)) = [];
-all_list_peak_times(isnan(all_list_peak_times)) = [];
 
 % %remove neurons without significant difference in firnig rate between in
 % %and out of field
@@ -448,6 +436,22 @@ sig_p_seq(sig_p_list == 0) = [];
 all_list_peak_times(sig_p_list == 0) = [];
 sig_p_list(sig_p_list == 0) = [];
 
+%remove neurons without a definitive peak
+all_in_rates(isnan(all_list_peak_times),:) = [];
+all_fixation_rates(isnan(all_list_peak_times),:) = [];
+all_out_rates(isnan(all_list_peak_times),:) = [];
+all_place_cell_unit_names(isnan(all_list_peak_times)) = [];
+coverage(isnan(all_list_peak_times)) = [];
+place_coverage(isnan(all_list_peak_times)) = [];
+place_field_area(isnan(all_list_peak_times)) = [];
+all_context_gain(isnan(all_list_peak_times)) = [];
+all_context_gain2(isnan(all_list_peak_times)) = [];
+all_peak_seq(isnan(all_list_peak_times)) = [];
+all_seq_peak_times(isnan(all_list_peak_times)) = [];
+sig_p_seq(isnan(all_list_peak_times)) = [];
+sig_p_list(isnan(all_list_peak_times)) = [];
+all_peak_list(isnan(all_list_peak_times)) = [];
+all_list_peak_times(isnan(all_list_peak_times)) = [];
 %% Plot Psuedo-Population Firing Rate Curves
 figure
 
@@ -659,7 +663,7 @@ disp([num2str(sum(sig_p_seq == -1)) ' (' num2str(100*sum(sig_p_seq == -1)/sum(~i
 %%
 figure
 subplot(2,2,1)
-histogram(100*all_context_gain,25)
+histogram(100*all_context_gain,24)
 xlabel('Task Preference (% Change)')
 ylabel('Count')
 box off
