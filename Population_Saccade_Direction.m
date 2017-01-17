@@ -32,6 +32,7 @@ all_mrl_out_pctiles = []; %observed MRLs shuffled percentile ignoring out2in and
 %---Other values---%
 spatialness = []; %1 for place cell, 0 for non place cell
 all_unit_names = {};
+all_monkeys = []; %1s and 2s for monkeys
 
 figure_dir = {};
 for monkey = 2:-1:1
@@ -42,7 +43,7 @@ for monkey = 2:-1:1
         excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
-        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resored Figures\';
+        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
         
         listsq_read_excel(data_dir,excel_file);
@@ -114,7 +115,8 @@ for monkey = 2:-1:1
                 all_mrl_out_pctiles = [all_mrl_out_pctiles mrls.out2out_shuffled_prctile(unit)]; %observed MRLs shuffled percentile ignoring out2in and in2out
                 
                 %---Other values---%
-                all_unit_names = [all_unit_names {[task_file(1:8) '_' unit_stats{1,unit}]}];
+                all_unit_names = [all_unit_names {[task_file(1:end-11) '_' unit_stats{1,unit}]}];
+                all_monkeys = [all_monkeys monkey];
                 if strcmpi([task_file(1:8) '_' unit_stats{1,unit}],'PW141008_sig002c'); %was found to be unreliable spatial unit so don't use
                     spatialness = [spatialness NaN];
                 elseif (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
@@ -135,3 +137,18 @@ disp([num2str(sum(all_mrl_out_pctiles > 95 & all_mrl_pctiles > 95)) ' direcitona
 disp('--------------------------------------------------------------')
 disp([num2str(sum(all_mrl_pctiles > 95 & spatialness == 1)) ' direcitonally modulated place cells for "all fixations"'])
 disp([num2str(sum(all_mrl_out_pctiles > 95 & spatialness == 1)) ' direcitonally modulated place cells for OUT2OUT fixations'])
+%%
+%%---Copy Relevant Figures to Summary Directory---%
+for unit = 1:length(all_unit_names)
+    if all_mrl_pctiles(unit) > 95
+        sub_dir1 = 'Saccade Direction\';
+        name1 = [all_unit_names{unit} '.png'];
+        if spatialness(unit) == 1 %place cell
+            copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
+                [summary_directory 'Place\' name1])
+        elseif spatialness(unit) == 0 %non place cell
+            copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
+                [summary_directory 'Non Place\' name1])
+        end
+    end
+end
