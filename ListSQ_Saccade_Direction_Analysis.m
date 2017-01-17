@@ -420,7 +420,7 @@ for unit = 1:num_units
     end
     
     subtitle([task_file(1:8) ' ' unit_stats{1,unit}]);
-    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit}]);
+    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Saccade_Direction_Analysis']);
 end
 
 
