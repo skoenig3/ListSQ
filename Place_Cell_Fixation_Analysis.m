@@ -31,7 +31,7 @@ img_on_code = 23; %cortex code when image turns on
 img_off_code = 24; %cortex code when image turns off
 ITIstart_code = 15; %start of ITI/trial
 event_codes = [23 24 25 26 27 28 29 30]; %Sequence task: odd indeces item on, even indeces item off
-numshuffs = 1000; %number of shuffles for resmampling
+numshuffs = 10000; %number of shuffles for resmampling
 
 min_fix_dur = 100; %100 ms %don't want fixations that are too short since won't get a good idea of firing pattern
 min_sac_amp = 48;%48 pixels = 2 dva don't want mini/micro saccades too small and hard to detect
@@ -102,8 +102,7 @@ list_fixation_locked_firing = cell(1,num_units); %firing rate locked to fixation
 saccade_direction = cell(1,num_units); %saccade direction organized the same as list_fixation_locked_firing
 area = NaN(1,num_units); %area of place field
 all_place_field_matrix = cell(1,num_units); %place field location 1 for in 0 for out, NaN for no coverage
-list_95_curve = cell(2,num_units); %shuffled 95% confidence interval row 1 out-> in vs out-> out, row 2 ?->in vs ?->out
-list_sig_ind = cell(2,num_units);%time points > 95% confidence interval
+list_sig_times = cell(2,num_units); %%time points > 95% confidence interval, corrected for multiple comparisons using Maris method
 in_out = cell(1,num_units); %organized same as list_fixation_locked_firing for fixations ....
 %1) first fixation in: out-> in
 %2) fixation in field but not first: in -> in
@@ -112,8 +111,8 @@ in_out = cell(1,num_units); %organized same as list_fixation_locked_firing for f
 
 %---Pre-allocate space for Fixations during Sequence Trials Analysis---%
 sequence_fixation_locked_firing = cell(4,num_units);%firing rate locked to fixations organized by item
-sequence_95_curve = cell(2,num_units);  %shuffled 95% confidence interval for fixation in field vs out of field, row 1 97.5% row 2 2.5%
-seq_sig_ind = cell(1,num_units);%time points > 95% confidence interval
+sequence_sig_times = cell(2,num_units);  %shuffled 95% confidence interval for fixation in field vs out of field, row 1 97.5% row 2 2.5%
+seq_sig_times = cell(1,num_units);%time points > 95% confidence interval
 all_which_sequence = cell(1,num_units); %which sequence
 trial_nums = cell(1,num_units); %trial numbers
 in_out_sequence = cell(1,num_units); %1 for sequence items inside 0 for suquence items outside NaN for items on border
@@ -131,8 +130,8 @@ for unit = 1:num_units
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if isnan(spatial_info.shuffled_rate_prctile(unit))
         continue %spatial analysis wasn't run on this unit
-%     elseif (spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.spatialstability_halves_prctile(unit) < 95)
-%         continue %unit not spatial or correlated in any sense
+    elseif (spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.spatialstability_halves_prctile(unit) < 95)
+        continue %unit not spatial or correlated in any sense
     end
     
     
@@ -328,19 +327,17 @@ for unit = 1:num_units
     end
     
     %for fixations out->in vs out->out
-    in_curve = nanmean(firing_rate_curve(in_or_out == 1,:));
+    in_curve = nanmean(firing_rate_curve(in_or_out == 1,:));  %firing rate curve for fixations in the field
     list_in_curve = in_curve; %firing rate curve for fixations in the field
-    out_curve = nanmean(firing_rate_curve(in_or_out == 4,:));
-    list_95_curve{1,unit} = prctile(all_curves,95,1); %95%tile of shuffled difference
-    %determine if observed difference is greater than expected by chance
-    list_sig_ind{1,unit} = find((in_curve-out_curve) > list_95_curve{1,unit});
+    out_curve = nanmean(firing_rate_curve(in_or_out == 4,:)); %firing rate fo fixations out of the filed
+    observed_diff = in_curve-out_curve; %observed difference in firing rate 
+    [~,list_sig_times{1,unit}] = cluster_level_statistic(observed_diff,all_curves,1); %multiple comparision corrected significant indeces
     
-    %for fixations ?->in vs ?->out in case not enough samples for the one above
+    %for fixations ?->in vs ?->out in case not enough samples for the one above    
     in_curve = nanmean(all_firing_rate_curve(in_or_out2 == 1 | in_or_out2 == 2,:));
     out_curve = nanmean(all_firing_rate_curve(in_or_out2 == 3 | in_or_out2 == 4,:));
-    list_95_curve{2,unit} = prctile(all_curves2,95,1);
-    %determine if observed difference is greater than expected by chance
-    list_sig_ind{2,unit} = find((in_curve-out_curve) > list_95_curve{2,unit});
+    observed_diff = in_curve-out_curve; %observed difference in firing rate 
+    [~,list_sig_times{2,unit}] = cluster_level_statistic(observed_diff,all_curves2,1); %multiple comparision corrected significant indeces
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -354,8 +351,8 @@ for unit = 1:num_units
     %find peaks that were in significant period and remove those that weren't
     rmv = [];
     for l = 1:length(LOCS);
-        if ~any(list_sig_ind{1,unit} == LOCS(l))%relaible during ?->in
-            if ~any(list_sig_ind{2,unit} == LOCS(l)) %relaible duringout->in
+        if ~any(list_sig_times{1,unit} == LOCS(l))%relaible during ?->in
+            if ~any(list_sig_times{2,unit} == LOCS(l)) %relaible duringout->in
                 rmv = [rmv l];
             end
         end
@@ -363,8 +360,8 @@ for unit = 1:num_units
     LOCS(rmv) = [];
     PKS(rmv) = [];
     if ~isempty(LOCS)
-        %remove peaks less than 1/2 the max
-        LOCS(PKS < 0.75) = [];
+        %remove peaks less than 2/3 the max
+        LOCS(PKS < 0.66) = [];
     end
     if ~isempty(LOCS)
         LOCS = LOCS(1);
@@ -455,22 +452,15 @@ for unit = 1:num_units
         ylim(yl);
     end
     plot([0 0],[yl(1) yl(2)],'k--')
-    gaps = findgaps(list_sig_ind{1,unit});
+    gaps = findgaps(find(list_sig_times{1,unit}));
     if ~isempty(gaps)
         for g = 1:size(gaps,1)
             gp = gaps(g,:);
             gp(gp == 0) = [];
-            if length(gp) > 1.5*smval %3 standard deviations
-                h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                    [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
-                uistack(h,'down')
-                set(h,'facealpha',.25,'EdgeColor','None')
-            else
-                h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                    [yl(1) yl(1) yl(2) yl(2) yl(1)],'g');
-                uistack(h,'down')
-                set(h,'facealpha',.25,'EdgeColor','None')
-            end
+            h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
+                [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
+            uistack(h,'down')
+            set(h,'facealpha',.25,'EdgeColor','None')
         end
     end
     xlim([-twin1 twin2]);
@@ -519,22 +509,15 @@ for unit = 1:num_units
         ylim(yl);
     end
     plot([0 0],[yl(1) yl(2)],'k--')
-    gaps = findgaps(list_sig_ind{2,unit});
+    gaps = findgaps(find(list_sig_times{2,unit}));
     if ~isempty(gaps)
         for g = 1:size(gaps,1)
             gp = gaps(g,:);
-            gp(gp == 0) = []; 
-            if length(gp) > 1.5*smval %3 standard deviations
-                h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                    [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
-                uistack(h,'down')
-                set(h,'facealpha',.25,'EdgeColor','None')
-            else
-                h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                    [yl(1) yl(1) yl(2) yl(2) yl(1)],'g');
-                uistack(h,'down')
-                set(h,'facealpha',.25,'EdgeColor','None')
-            end
+            gp(gp == 0) = [];
+            h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
+                [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
+            uistack(h,'down')
+            set(h,'facealpha',.25,'EdgeColor','None')
         end
     end
     box off
@@ -545,7 +528,6 @@ for unit = 1:num_units
     set(gca,'Xtick',[-twin1 -twin1/2 0 twin1/2 twin1 3/2*twin1 twin2])
     title(sprintf(['n_{?->in} = ' num2str(sum(fix_in_out == 1 | fix_in_out == 2))...
         ', n_{?->out} = ' num2str(sum(fix_in_out == 3 | fix_in_out == 4))]));
-    
     
     num_trials_str = [' n_{img} = ' num2str(size(spike_times{unit},1))];
     if multiunit(unit)
@@ -754,11 +736,10 @@ for unit = 1:num_units
             shuff_out_curve = nanmean(firing_rate_curves(shuff_in_or_out == 0,:));
             all_curves(shuff,:) = shuff_in_curve-shuff_out_curve;
         end
-        sequence_95_curve{1,unit} = prctile(all_curves,97.5,1);
-        sequence_95_curve{2,unit} = prctile(all_curves,2.5,1);
         in_curve = nandens(fixation_firing(seq_in_out == 1,:),smval,'gauss',Fs,'nanflt');
         out_curve = nandens(fixation_firing(seq_in_out == 0,:),smval,'gauss',Fs,'nanflt');
-        seq_sig_ind{unit} = find((in_curve-out_curve) > sequence_95_curve{1,unit} | (in_curve-out_curve) < sequence_95_curve{2,unit});
+        observed_diff = in_curve-out_curve; %observed difference in firing rate 
+        [~,seq_sig_times{unit}] = cluster_level_statistic(observed_diff,all_curves2,2); %multiple comparision corrected significant indeces
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Determine Peak and Time of Peak Firing Rate aligned to Fixation----%%%
@@ -771,23 +752,21 @@ for unit = 1:num_units
         %find peaks that were in significant period and remove those that weren't
         rmv = [];
         for l = 1:length(LOCS);
-            if ~any(seq_sig_ind{unit} == LOCS(l))
+            if ~any(seq_sig_times{unit} == LOCS(l))
                 rmv = [rmv l];
             end
         end
         LOCS(rmv) = [];
         PKS(rmv) = [];
         if ~isempty(LOCS)
-            %remove peaks less than 1/2 the max
-            LOCS(PKS < 0.75) = [];
+            %remove peaks less than 2/3 the max
+            LOCS(PKS < 0.66) = [];
         end
         if ~isempty(LOCS)
             LOCS = LOCS(1);
             stats_across_tasks(3,unit) = LOCS; %time of peak
             stats_across_tasks(4,unit) = seq_in_curve(LOCS); %peak firing rate
         end
-        
-        
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Plot Sequence Firing Rates for Items Inside vs Outside Field---%%%
@@ -871,22 +850,15 @@ for unit = 1:num_units
             yl(1) = 0;
             ylim(yl);
         end
-        gaps = findgaps(seq_sig_ind{unit});
+        gaps = findgaps(find(seq_sig_times{unit}));
         if ~isempty(gaps)
             for g = 1:size(gaps,1)
                 gp = gaps(g,:);
                 gp(gp == 0) = [];
-                if length(gp) > 1.5*smval
-                    h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                        [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
-                    uistack(h,'down')
-                    set(h,'facealpha',.25,'EdgeColor','None')
-                else
-                    h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                        [yl(1) yl(1) yl(2) yl(2) yl(1)],'g');
-                    uistack(h,'down')
-                    set(h,'facealpha',.25,'EdgeColor','None')
-                end
+                h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
+                    [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
+                uistack(h,'down')
+                set(h,'facealpha',.25,'EdgeColor','None')
             end
         end
         plot([0 0],[yl(1) yl(2)],'k--')
@@ -914,22 +886,15 @@ for unit = 1:num_units
             ylim(yl);
         end
         plot([0 0],[yl(1) yl(2)],'k--')
-        gaps = findgaps(list_sig_ind{1,unit});
+        gaps = findgaps(find(list_sig_times{1,unit}));
         if ~isempty(gaps)
             for g = 1:size(gaps,1)
                 gp = gaps(g,:);
                 gp(gp == 0) = [];
-                if length(gp) > 1.5*smval %3 standard deviations
-                    h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                        [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
-                    uistack(h,'down')
-                    set(h,'facealpha',.25,'EdgeColor','None')
-                else
-                    h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
-                        [yl(1) yl(1) yl(2) yl(2) yl(1)],'g');
-                    uistack(h,'down')
-                    set(h,'facealpha',.25,'EdgeColor','None')
-                end
+                h = fill([min(gp) max(gp) max(gp) min(gp) min(gp)]-twin1,...
+                    [yl(1) yl(1) yl(2) yl(2) yl(1)],'k');
+                uistack(h,'down')
+                set(h,'facealpha',.25,'EdgeColor','None')
             end
         end
         box off
@@ -986,6 +951,5 @@ save([data_dir task_file(1:8) '-Place_Cell_Analysis.mat'],...
     'twin1','twin2','smval','list_fixation_locked_firing','in_out',...
     'task_file','area','stats_across_tasks','unit_stats','sequence_fixation_locked_firing',...
     'all_place_field_matrix','trial_nums','numshuffs','in_out_sequence',...
-    'all_which_sequence','saccade_direction','list_95_curve','sequence_95_curve',...
-    'list_sig_ind','seq_sig_ind')
+    'all_which_sequence','saccade_direction','list_sig_times','sequence_sig_times')
 end

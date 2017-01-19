@@ -39,6 +39,8 @@ visual_response_stats_long_sliding = []; %sliding window analysis for long 5 sec
 spatialness = []; %1 for place cells, 0 for non place cells
 fixation_on_cross_status = []; %1 for sig, 0 for not sig
 image_off_status = [];%1 for sig, 0 for not sig
+memory_short = [];%significant indeces within the first 1 second window
+memory_long = [];%significant indeces for 5 second window
 
 %---Firing Rate Curves---%
 cross_fixation_firing_rates = [];%fixation on across
@@ -46,247 +48,226 @@ image_on_firing_rates = []; %image on 1 second window
 long_image_on_firing_rates = [];%image on 5 second window
 image_off_firing_rates = []; %image off
 
-total_dur_short = [];
-max_dur_short = [];
-novrep_short = [];
+short_durs =[];
+long_durs = [];
 FWHM =[];
-    
-total_dur_long = [];
-max_dur_long = [];
-novrep_long = [];
-
 
 monkeys = {'Vivian','Tobii'};
 figure_dir = {};
 for monk =2:-1:1
-monkey = monkeys{monk};
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%---Read in Excel Sheet for Session data---%%%
-%only need to run when somethings changed or sessions have been added
-if strcmpi(monkey,'Vivian')
-    excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
-    excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
-    data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
-    figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
-    
-    
-    %listsq_read_excel(data_dir,excel_file);
-    load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
-    
-    predict_rt = 156;%156 ms prediction 5-percentile
-    chamber_zero = [13.5 -11]; %AP ML
-    
-elseif strcmpi(monkey,'Tobii')
-    excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
-    excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
-    data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
-    figure_dir{2} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Figures\';
-    
-    predict_rt = 138;%ms prediction 5-percentile
-    chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
-    
-    %listsq_read_excel(data_dir,excel_file);
-    load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
-    session_data(end) = [];%last file doesn't have strobe signal working on importing the data
-end
-
-for sess = 1:length(session_data)
-    %read in task file data
-    [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,~]=...
-        get_task_data(session_data{sess},task);
-    if isempty(task_file)
-        continue
+    monkey = monkeys{monk};
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %---Read in Excel Sheet for Session data---%%%
+    %only need to run when somethings changed or sessions have been added
+    if strcmpi(monkey,'Vivian')
+        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
+        excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
+        data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
+        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
+        
+        
+        %listsq_read_excel(data_dir,excel_file);
+        load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
+        
+        predict_rt = 156;%156 ms prediction 5-percentile
+        chamber_zero = [13.5 -11]; %AP ML
+        
+    elseif strcmpi(monkey,'Tobii')
+        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
+        excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
+        data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
+        figure_dir{2} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Figures\';
+        
+        predict_rt = 138;%ms prediction 5-percentile
+        chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
+        
+        %listsq_read_excel(data_dir,excel_file);
+        load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
+        session_data(end) = [];%last file doesn't have strobe signal working on importing the data
     end
     
-    %load task file data
-    load([data_dir task_file(1:end-11) '-preprocessed.mat'],'valid_trials',...
-        'stability_attribute','cfg','hdr','data');
-    
-    %get unit data
-    [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
-        multiunit,unit_confidence,sorting_quality);
-    if num_units == 0
-        continue
-    end
-    
-    num_trials = length(cfg.trl); %number of trials
-    valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks,task);
-    if all(isnan(valid_trials(1,:)))
-        continue
-    end
-    
-    if exist([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat'],'file') %want to remove later
-        load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']);
-    else
-        continue
-    end
-    
-    disp(task_file(1:8))
-    if exist([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat'],'file') %want to remove later
-        load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']) %visual response analysis
-        load([data_dir task_file(1:8) '-ListSQ-Visual_Response_Memory_results']) %memory visual response analysis
-        load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info') %spatial analysis
-    else
-        if num_units ~= 0
-            error('Where is this file')
+    for sess = 1:length(session_data)
+        %read in task file data
+        [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,~]=...
+            get_task_data(session_data{sess},task);
+        if isempty(task_file)
+            continue
         end
-        continue
-    end
-    
-    
-    for unit = 1:num_units
-        if ~isempty(time_lock_firing{unit,1})
-            
-            %novel/repeat test code
-            %             pass = 0;
-            %             durs = [];
-            %             gaps = findgaps(find(sig_short{unit}));
-            %             if ~isempty(gaps)
-            %                 for g = 1:size(gaps,1)
-            %                     gp = gaps(g,:);
-            %                     gp(gp == 0) = [];
-            %                     if length(gp) > smval %2 standard deviations
-            %                         pass = 1;
-            %                     end
-            %                     if length(gp) > 0
-            %                         durs = [durs length(gp)];
-            %                     end
-            %                 end
-            %             end
-            %             if pass == 1
-            %                 novrep_short = [novrep_short 1];
-            %             else
-            %                 novrep_short = [novrep_short 0];
-            %             end
-            %             total_dur_short = [total_dur_short durs];
-            %             max_dur_short = [max_dur_short max(durs)];
-            %
-            %             pass = 0;
-            %             durs = [];
-            %             gaps = findgaps(find(sig_long{unit}));
-            %             if ~isempty(gaps)
-            %                 for g = 1:size(gaps,1)
-            %                     gp = gaps(g,:);
-            %                     gp(gp == 0) = [];
-            %                     if length(gp) > smval2 %2 standard deviations
-            %                         pass = 1;
-            %                     end
-            %                     if length(gp) > 0
-            %                         durs = [durs length(gp)];
-            %                     end
-            %                 end
-            %             end
-            %             if pass == 1
-            %                 novrep_long = [novrep_long 1];
-            %             else
-            %                 novrep_long = [novrep_long 0];
-            %             end
-            %             total_dur_long = [total_dur_long durs];
-            %             max_dur_long = [max_dur_long max(durs)];
-            
-            
-            %---Misc. Parameters---%
-            monkey_all_unit_count(1,monk) = monkey_all_unit_count(1,monk)+1; %unit count
-            ll_multi_unit_count = all_multi_unit_count+multiunit(unit); %multiunit count
-            all_unit_names = [all_unit_names {[task_file(1:end-11) '_' unit_stats{1,unit}]}]; %unit name
-            all_monkeys = [all_monkeys monk]; %1s and 2s
-            AP_location = [AP_location chamber_zero(1)+ session_data{sess}.location(1)]; %AP location of recorded place cell
-            
-            
-            %---Unit Test Significance and Firing Rate Curves---%
-            if strcmpi([task_file(1:8) '_' unit_stats{1,unit}],'PW141008_sig002c'); %was found to be unreliable spatial unit so don't use
-                spatialness = [spatialness NaN];
-            elseif (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
-                spatialness = [spatialness 1]; %place cell
-            else
-                spatialness = [spatialness 0]; %non place cell
+        
+        %load task file data
+        load([data_dir task_file(1:end-11) '-preprocessed.mat'],'valid_trials',...
+            'stability_attribute','cfg','hdr','data');
+        
+        %get unit data
+        [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
+            multiunit,unit_confidence,sorting_quality);
+        if num_units == 0
+            continue
+        end
+        
+        num_trials = length(cfg.trl); %number of trials
+        valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks,task);
+        if all(isnan(valid_trials(1,:)))
+            continue
+        end
+        
+        if exist([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat'],'file') %want to remove later
+            load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']);
+        else
+            continue
+        end
+        
+        disp(task_file(1:8))
+        if exist([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat'],'file') %want to remove later
+            load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']) %visual response analysis
+            load([data_dir task_file(1:8) '-ListSQ-Visual_Response_Memory_results']) %memory visual response analysis
+            load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info') %spatial analysis
+        else
+            if num_units ~= 0
+                error('Where is this file')
             end
-            
-            %---for fixation on cross hair---%
-            if (epoch_data.rate_prctile(unit,2) > 95) && (epoch_data.temporalstability_prctile(unit,2) > 95)
-                fixation_on_cross_status = [fixation_on_cross_status 1]; %significant
-                firing_rate = time_lock_firing{unit,2}(:,1:twin1+twin3); %for now only look at first 500 ms after fixation
-                [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                firing_rate = firing_rate-nanmean(firing_rate);
-                if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                    firing_rate = firing_rate/max(abs(firing_rate));
-                else%normalize to min %could have some neurons that only show supression
-                    firing_rate = firing_rate/min(firing_rate);
+            continue
+        end
+        
+        
+        for unit = 1:num_units
+            if ~isempty(time_lock_firing{unit,1})
+                
+                %---Misc. Parameters---%
+                monkey_all_unit_count(1,monk) = monkey_all_unit_count(1,monk)+1; %unit count
+                ll_multi_unit_count = all_multi_unit_count+multiunit(unit); %multiunit count
+                all_unit_names = [all_unit_names {[task_file(1:end-11) '_' unit_stats{1,unit}]}]; %unit name
+                all_monkeys = [all_monkeys monk]; %1s and 2s
+                AP_location = [AP_location chamber_zero(1)+ session_data{sess}.location(1)]; %AP location of recorded place cell
+                
+                
+                %---Unit Test Significance and Firing Rate Curves---%
+                if strcmpi([task_file(1:8) '_' unit_stats{1,unit}],'PW141008_sig002c'); %was found to be unreliable spatial unit so don't use
+                    spatialness = [spatialness NaN];
+                elseif (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+                    spatialness = [spatialness 1]; %place cell
+                else
+                    spatialness = [spatialness 0]; %non place cell
                 end
-                cross_fixation_firing_rates = [cross_fixation_firing_rates; firing_rate];
-            else
-                fixation_on_cross_status = [fixation_on_cross_status 0]; %not significan
-            end
-            
-            
-            %---for image on short 1 second window---%
-            if (epoch_data.rate_prctile(unit,3) > 95) && (epoch_data.temporalstability_prctile(unit,3) > 95)
-                visual_response_stats_short = [visual_response_stats_short 1]; %signficant
-                firing_rate = time_lock_firing{unit,3};
-                [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                firing_rate = firing_rate-nanmean(firing_rate);
-                if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                    firing_rate = firing_rate/max(abs(firing_rate));
-                else%normalize to min %could have some neurons that only show supression
-                    firing_rate = firing_rate/min(firing_rate);
+                
+                %---for fixation on cross hair---%
+                if (epoch_data.rate_prctile(unit,2) > 95) && (epoch_data.temporalstability_prctile(unit,2) > 95)
+                    fixation_on_cross_status = [fixation_on_cross_status 1]; %significant
+                    firing_rate = time_lock_firing{unit,2}(:,1:twin1+twin3); %for now only look at first 500 ms after fixation
+                    [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
+                    firing_rate = firing_rate-nanmean(firing_rate);
+                    if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+                        firing_rate = firing_rate/max(abs(firing_rate));
+                    else%normalize to min %could have some neurons that only show supression
+                        firing_rate = firing_rate/min(firing_rate);
+                    end
+                    cross_fixation_firing_rates = [cross_fixation_firing_rates; firing_rate];
+                else
+                    fixation_on_cross_status = [fixation_on_cross_status 0]; %not significan
                 end
-                image_on_firing_rates = [image_on_firing_rates ; firing_rate];
-            else
-                visual_response_stats_short = [visual_response_stats_short 0]; %not signficant
-            end
-            
-            
-            %---for long image on 5 second period---%
-            if (epoch_data.rate_prctile(unit,5) > 95) && (epoch_data.temporalstability_prctile(unit,5) > 95)
-                visual_response_stats_long = [ visual_response_stats_long 1];%signficant
-                firing_rate = time_lock_firing{unit,5};
-                [firing_rate,~]= nandens(firing_rate,smval2,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                firing_rate = firing_rate-nanmean(firing_rate);
-                if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                    firing_rate = firing_rate/max(abs(firing_rate));
-                else%normalize to min %could have some neurons that only show supression
-                    firing_rate = firing_rate/min(firing_rate);
+                
+                
+                %---for image on short 1 second window---%
+                if (epoch_data.rate_prctile(unit,3) > 95) && (epoch_data.temporalstability_prctile(unit,3) > 95)
+                    visual_response_stats_short = [visual_response_stats_short 1]; %signficant
+                    firing_rate = time_lock_firing{unit,3};
+                    [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
+                    firing_rate = firing_rate-nanmean(firing_rate);
+                    if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+                        firing_rate = firing_rate/max(abs(firing_rate));
+                    else%normalize to min %could have some neurons that only show supression
+                        firing_rate = firing_rate/min(firing_rate);
+                    end
+                    image_on_firing_rates = [image_on_firing_rates ; firing_rate];
+                else
+                    visual_response_stats_short = [visual_response_stats_short 0]; %not signficant
                 end
-                long_image_on_firing_rates = [long_image_on_firing_rates ; firing_rate];
-            else
-                visual_response_stats_long = [ visual_response_stats_long 0];%not signficant
-            end
-            
-            %---for image off---%
-            if (epoch_data.rate_prctile(unit,4) > 95) && (epoch_data.temporalstability_prctile(unit,4) > 95)
-                image_off_status = [image_off_status 1];%signficant
-                firing_rate = time_lock_firing{unit,4};
-                [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                firing_rate = firing_rate-nanmean(firing_rate);
-                if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                    firing_rate = firing_rate/max(abs(firing_rate));
-                else%normalize to min %could have some neurons that only show supression
-                    firing_rate = firing_rate/min(firing_rate);
+                
+                
+                %---for long image on 5 second period---%
+                if (epoch_data.rate_prctile(unit,5) > 95) && (epoch_data.temporalstability_prctile(unit,5) > 95)
+                    visual_response_stats_long = [ visual_response_stats_long 1];%signficant
+                    firing_rate = time_lock_firing{unit,5};
+                    [firing_rate,~]= nandens(firing_rate,smval2,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
+                    firing_rate = firing_rate-nanmean(firing_rate);
+                    if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+                        firing_rate = firing_rate/max(abs(firing_rate));
+                    else%normalize to min %could have some neurons that only show supression
+                        firing_rate = firing_rate/min(firing_rate);
+                    end
+                    long_image_on_firing_rates = [long_image_on_firing_rates ; firing_rate];
+                else
+                    visual_response_stats_long = [ visual_response_stats_long 0];%not signficant
                 end
-                image_off_firing_rates = [image_off_firing_rates ; firing_rate];
-            else
-                image_off_status = [image_off_status 0];%not signficant
-            end
-            
-            %---Sliding Window Analysis Simialr to Jutras and Buffalo---%
-            if sum(sig_visual_response(unit,:)) == 0%nothing is significant
-                visual_response_stats_short_sliding = [visual_response_stats_short_sliding 0];
-                visual_response_stats_long_sliding = [visual_response_stats_long_sliding 0];
-            else %something is signfiicant so check short and long times
-                if sum(sig_visual_response(unit,1:twin1+twin2)) > 0 %then short has significant response
-                    visual_response_stats_short_sliding = [visual_response_stats_short_sliding 1];
-                else %not significant
+                
+                %---for image off---%
+                if (epoch_data.rate_prctile(unit,4) > 95) && (epoch_data.temporalstability_prctile(unit,4) > 95)
+                    image_off_status = [image_off_status 1];%signficant
+                    firing_rate = time_lock_firing{unit,4};
+                    [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
+                    firing_rate = firing_rate-nanmean(firing_rate);
+                    if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+                        firing_rate = firing_rate/max(abs(firing_rate));
+                    else%normalize to min %could have some neurons that only show supression
+                        firing_rate = firing_rate/min(firing_rate);
+                    end
+                    image_off_firing_rates = [image_off_firing_rates ; firing_rate];
+                else
+                    image_off_status = [image_off_status 0];%not signficant
+                end
+                
+                %---Memory Responses---%
+                if visual_response_stats_short(end) == 1 %then visual responsive within 1 second window
+                    if sum(sig_short{unit}) > 0
+                        memory_short = [memory_short 1];
+                        gaps = findgaps(find(sig_short{unit}));
+                        for g = 1:size(gaps,1)
+                            gp = gaps(g,:);
+                            gp(gp == 0) = [];
+                            short_durs = [short_durs length(gp)];
+                        end
+                    else
+                        memory_short = [memory_short 0];
+                    end
+                else
+                    memory_short = [memory_short NaN];
+                end
+                
+                if visual_response_stats_long(end) == 1 % within 5 second window
+                    if sum(sig_long{unit}) > 0
+                        memory_long = [memory_long 1];
+                        gaps = findgaps(find(sig_long{unit}));
+                        for g = 1:size(gaps,1)
+                            gp = gaps(g,:);
+                            gp(gp == 0) = [];
+                            long_durs = [long_durs length(gp)];
+                        end
+                    else
+                        memory_long = [memory_long 0];
+                    end
+                else
+                    memory_long = [memory_long NaN];
+                end
+                
+                %---Sliding Window Analysis Simialr to Jutras and Buffalo---%
+                if sum(sig_visual_response(unit,:)) == 0%nothing is significant
                     visual_response_stats_short_sliding = [visual_response_stats_short_sliding 0];
-                end
-                if sum(sig_visual_response(unit,twin1+twin2:end)) > 0 %then long has significant response
-                    visual_response_stats_long_sliding = [visual_response_stats_long_sliding 1];
-                else %then not significant
                     visual_response_stats_long_sliding = [visual_response_stats_long_sliding 0];
+                else %something is signfiicant so check short and long times
+                    if sum(sig_visual_response(unit,1:twin1+twin2)) > 0 %then short has significant response
+                        visual_response_stats_short_sliding = [visual_response_stats_short_sliding 1];
+                    else %not significant
+                        visual_response_stats_short_sliding = [visual_response_stats_short_sliding 0];
+                    end
+                    if sum(sig_visual_response(unit,twin1+twin2:end)) > 0 %then long has significant response
+                        visual_response_stats_long_sliding = [visual_response_stats_long_sliding 1];
+                    else %then not significant
+                        visual_response_stats_long_sliding = [visual_response_stats_long_sliding 0];
+                    end
                 end
             end
         end
     end
-end
 end
 %% Display Summary Results
 clc
@@ -303,9 +284,9 @@ disp([num2str(sum((visual_response_stats_long == 1) & spatialness == 1)) ' View 
 %%---Copy Relevant Figures to Summary Directory---%
 for unit = 1:length(all_unit_names)
     sub_dir1 = 'Visual Response\';
-    
+
     %---Visual responsive neurons according to skaggs and correlation---%
-    name1 = [all_unit_names{unit} '_Image_Visual Response.png'];    
+    name1 = [all_unit_names{unit} '_Image_Visual Response.png'];
     if visual_response_stats_short(unit) == 1 || visual_response_stats_long(unit) == 1 %visually responsive
         if spatialness(unit) == 1 %place cell
             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
@@ -315,7 +296,7 @@ for unit = 1:length(all_unit_names)
                 [summary_directory 'Non Place\' name1])
         end
     end
-    
+
     %---Visual responsive neurons only according to sliding window---%
     if (visual_response_stats_short(unit) == 0 && visual_response_stats_long(unit) == 0) ...
             && (visual_response_stats_short_sliding(unit) == 1 || visual_response_stats_long_sliding(unit) == 1)
@@ -329,11 +310,22 @@ for unit = 1:length(all_unit_names)
          copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
             [summary_directory 'Cross Response\' name2])
     end
-    
+
     %---Image Off Response---%
     if image_off_status(unit) == 1
          copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
             [summary_directory 'Image Off Response\' name2])
+    end
+    
+    %---Memory Response---%
+    name2 = [all_unit_names{unit} '_Image_Visual Response_Memory.png'];
+    if memory_short(unit) == 1 %memory response within 1 second window
+         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
+            [summary_directory 'Memory\' name2])
+    end
+    if memory_long(unit) == 1 %memory response within 1 second window
+         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
+            [summary_directory 'Memory\' name2])
     end
     
 end
@@ -396,7 +388,3 @@ xlabel('Time from Image Off (ms)')
 ylabel('Neuron #')
 title('Image Offset')
 xlim([-500 500])
-
-
-
-
