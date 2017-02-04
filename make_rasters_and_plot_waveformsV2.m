@@ -321,6 +321,7 @@ switch task
         for unit = 1:num_units
             allspikes = NaN(length(cfg.trl),3500);
             allspikesITI = NaN(length(cfg.trl),1500);
+            rewardspikes = NaN(length(cfg.trl),1500);
             
             gain = gains(str2double(unit_stats{1,unit}(6)));
             waveforms{1,unit} = gain*waveforms{1,unit}; %conver to uV
@@ -344,6 +345,8 @@ switch task
                 trial_num(t) = t;
                 trial_start = cfg.trl(t).alltim(cfg.trl(t).allval == ITI_code);
                 event = cfg.trl(t).alltim(cfg.trl(t).allval == dot_on_code)-trial_start;
+                reward = cfg.trl(t).alltim(cfg.trl(t).allval == reward_code)-trial_start;
+                reward = reward(1);
                 
                 spikes =data(unit).values{t};
                 
@@ -366,12 +369,17 @@ switch task
                 %locked to the ITI
                 allspikesITI(t,:) = spikes(1:1500);
                 
+                %locked to reward
+                rewardspikes(t,:) = spikes(reward-500:reward+999);
+                
                 %locked to main event
                 spikes = find(spikes);
                 spikes = spikes-event;
                 spikes(spikes < 1) = [];
                 spikes(spikes > 3500) = [];
-                allspikes(t,spikes) = 1;
+                temp = zeros(1,3500);
+                temp(spikes) = 1;
+                allspikes(t,:) = temp;
             end
             
             
@@ -385,6 +393,7 @@ switch task
             allspikes = laundry(allspikes,1);
             allspikesITI = laundry(allspikesITI,1);
             trial_averaged_amplitude(trial_averaged_amplitude == 0) = NaN;
+            rewardspikes = laundry(rewardspikes,1);
             %replace 0's with NaNs didn't want to erase the data before
             trial_num = laundry(trial_num);
             
@@ -398,8 +407,8 @@ switch task
             if spike_count < minimum_spikes %too few spikes
                 
                 cvtnewplot(allspikes,allspikesITI,allspikespertrial,spikespertrial,...
-                    ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,...
-                    avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit});
+                    ITIspikespertrial,rewardspikes,trialbinsize,binsize,trial_averaged_amplitude,...
+                    avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit},trial_num);
                 save_and_close_fig(too_few_folder,[task_file(1:end-11) '_' unit_stats{1,unit} '_raster']);
                 
                 stability_attribute(unit) = 2;
@@ -408,8 +417,8 @@ switch task
             elseif unit_stats{3,unit} <= poor_isolation_threshold || unit_stats{2,unit} <= confidence_threshold
                 %not confident it's a unit or good isolation
                 cvtnewplot(allspikes,allspikesITI,allspikespertrial,spikespertrial,...
-                    ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,...
-                    avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit});
+                    ITIspikespertrial,rewardspikes,trialbinsize,binsize,trial_averaged_amplitude,...
+                    avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit},trial_num);
                 save_and_close_fig(PoorIsolationFolder,[task_file(1:end-11) '_' unit_stats{1,unit} '_raster']);
                 
                 stability_attribute(unit) = 4;
@@ -419,8 +428,8 @@ switch task
             
             
             cvtnewplot(allspikes,allspikesITI,allspikespertrial,spikespertrial,...
-                ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,...
-                avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit});
+                ITIspikespertrial,rewardspikes,trialbinsize,binsize,trial_averaged_amplitude,...
+                avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit},trial_num);
             
             
             %do manual check of which trials to take. Humans are just
@@ -433,8 +442,9 @@ switch task
                     'If NO please state [trial start and trial end].']);
             end
             if isnumeric(reply)
-                [start_end] = cvtnewTrialCutoffplots(reply,allspikes,allspikesITI,allspikespertrial,...
-                    spikespertrial,ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit});
+                [start_end] = cvtnewTrialCutoffplots(reply,allspikes,allspikesITI,rewardspikes,allspikespertrial,...
+                    spikespertrial,ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,...
+                    avg_waveform,waveforms(:,unit),threshold,title_str,unit_stats{4,unit},trial_num);
             else
                 start_end = [NaN NaN]; %then take all trials
             end
@@ -632,8 +642,8 @@ subtitle(title_str);
 end
 
 function  cvtnewplot(allspikes,allspikesITI,allspikespertrial,...
-    spikespertrial,ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,...
-    avg_waveform,waveforms,threshold,title_str,comments)
+    spikespertrial,ITIspikespertrial,rewardspikes,trialbinsize,binsize,trial_averaged_amplitude,...
+    avg_waveform,waveforms,threshold,title_str,comments,trial_num)
 %plot the cvtnew
 
 if ~isempty(findall(0,'Type','Figure'))
@@ -650,40 +660,43 @@ screen_size = get(0, 'ScreenSize');
 set(gcf, 'Position', [0 0 screen_size(3) screen_size(4)]);
 pause(0.5) %give time for plot to reach final size
 
+
 % Rasters from Main Event
-subplot(3,2,1)
+subplot(3,3,1)
 [trial,time] = find(allspikesITI == 1);
-plot(time,trial,'.k')
-ylim([0 trialbinsize*length(trial_averaged_amplitude)+trialbinsize])
+if ~isempty(trial)
+    plot(time,trial_num(trial),'.k')
+    ylim([0 max(trial_num(trial))+5])
+end
+ylim([0 max(trial)+5])
 ylabel('Trial #')
-xlim([0 2000])
+xlim([0 1500])
+xlabel('Time from ITI start (ms)')
+box off
 
-subplot(3,2,2)
+subplot(3,3,2)
 [trial,time] = find(allspikes == 1);
-plot(time,trial,'.k')
-ylim([0 trialbinsize*length(trial_averaged_amplitude)+trialbinsize])
+if ~isempty(trial)
+    plot(time,trial_num(trial),'.k')
+    ylim([0 max(trial_num(trial))+5])
+end
 ylabel('Trial #')
 xlim([0 3500])
-
-
-%PSTHs from main event
-subplot(3,2,3)
-asp = bin1(allspikesITI,binsize,'lower','sum');
-bar(binsize:binsize:binsize*length(asp),asp,'k');
+xlabel('Time from Dot on (ms)')
 box off
-xlim([0 2000])
-ylabel('Count')
-xlabel('Time from ITI Start (ms)')
 
-subplot(3,2,4)
-asp = bin1(allspikes,binsize,'lower','sum');
-bar(binsize:binsize:binsize*length(asp),asp,'k');
+subplot(3,3,3)
+[trial,time] = find(rewardspikes == 1);
+if ~isempty(trial)
+    plot(time,trial_num(trial),'.k')
+    ylim([0 max(trial_num(trial))+5])
+end
+ylabel('Trial #')
+xlim([0 1500])
+xlabel('Time from Reward start (ms)')
 box off
-xlim([0 3500])
-ylabel('Count')
-xlabel('Time from Dot On (ms)')
 
-subplot(3,2,5)
+subplot(3,3,[7 8])
 hold on
 b = bar([spikespertrial ITIspikespertrial],'stacked');
 if ~isempty(trial)
@@ -708,7 +721,7 @@ xlabel(['Groups of Trials (' num2str(trialbinsize) 'trials/group)'])
 ylabel('Average Spikes per trial')
 
 
-subplot(3,4,11)
+subplot(3,3,5)
 hold all
 for i = 1:length(avg_waveform)
     plot(avg_waveform{i})
@@ -720,11 +733,36 @@ ylabel('Avg Waveform (uV)')
 xlim([1 32])
 ylim([-3000 3000]) %max voltage is 3000 uV
 
-subplot(3,4,12)
+subplot(3,3,6)
 plot(max(waveforms{1})-min(waveforms{1}),waveforms{2},'k.')
 xlabel('Amplitude (uV)')
 ylabel('"Time Stamp"')
 axis tight
+box off
+
+
+subplot(3,3,9)
+len = length(comments);
+rows = floor(len/40);
+if rows > 1
+    cmnts = [];
+    for r = 1:rows
+        rind = 40*(r-1)+1:40*r;
+        if r == rows
+        cmnts = [cmnts '\n' comments(rind(1):end)];
+        else
+            cmnts = [cmnts '\n' comments(rind)];
+        end
+    end
+    text(0.5,0.5,sprintf(cmnts))
+else
+    if ~isnan(comments) %if NaN no comments
+        text(0.5,0.5,comments)
+    end
+end
+title('Comments')
+axis off
+
 
 subtitle(title_str);
 
@@ -792,18 +830,17 @@ while isnumeric(reply)
 end
 end
 
-function [start_end] = cvtnewTrialCutoffplots(reply,allspikes,allspikesITI,allspikespertrial,...
+function [start_end] = cvtnewTrialCutoffplots(reply,allspikes,allspikesITI,rewardspikes,allspikespertrial,...
     spikespertrial,ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,avg_waveform,...
-    waveforms,threshold,title_str,comments)
+    waveforms,threshold,title_str,comments,trial_num)
 %plot the cutoffs from replys
 while isnumeric(reply)
-    cvtnewplot(allspikes,allspikesITI,allspikespertrial,spikespertrial,...
-        ITIspikespertrial,trialbinsize,binsize,trial_averaged_amplitude,...
-        avg_waveform,waveforms,threshold,title_str,unit_stats{4,unit})
     
-    start_end = reply;
-    
-        
+    cvtnewplot(allspikes,allspikesITI,allspikespertrial,...
+    spikespertrial,ITIspikespertrial,rewardspikes,trialbinsize,binsize,trial_averaged_amplitude,...
+    avg_waveform,waveforms,threshold,title_str,comments,trial_num)
+
+    start_end = reply;        
     if length(reply) ~= 2
        reply = [0 0]; 
     end
@@ -818,7 +855,7 @@ while isnumeric(reply)
         nano = 1;
     end
     
-    subplot(3,2,5)
+    subplot(3,3,[7 8])
     yl = ylim;
     hold on
     if nano
@@ -830,7 +867,7 @@ while isnumeric(reply)
     end
     hold off
     
-    subplot(3,2,1)
+    subplot(3,3,1)
     xl = xlim;
     if nano
         yl = ylim;
@@ -845,7 +882,22 @@ while isnumeric(reply)
         hold off
     end
     
-    subplot(3,2,2)
+    subplot(3,3,2)
+    xl = xlim;
+    if nano
+        yl = ylim;
+        hold on
+        plot([0 xl(2)],[reply(1) reply(1)],'r');
+        plot([0 xl(2)],[yl(2) yl(2)],'r');
+        hold off
+    else
+        hold on
+        plot([0 xl(2)],[reply(1) reply(1)],'r');
+        plot([0 xl(2)],[reply(2) reply(2)],'r');
+        hold off
+    end
+    
+    subplot(3,3,3)
     xl = xlim;
     if nano
         yl = ylim;
