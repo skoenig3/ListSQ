@@ -202,32 +202,18 @@ for monk =2:-1:1
                 
                 %find when firing rate for in field fixations is higher than out of field
                 %for fixation out->in vs out->out
-                gaps = findgaps(list_sig_ind{1,unit});
-                pass = 0;
-                if ~isempty(gaps)
-                    for g = 1:size(gaps,1)
-                        gp = gaps(g,:);
-                        gp(gp == 0) = [];
-                        if length(gp) > 1.5*smval %2 standard deviation
-                            pass = 1;
-                            break
-                        end
-                    end
+                if sum(list_sig_times{1,unit}) > 0
+                    pass = 1;
+                else
+                    pass = 0;
                 end
                 
                 %find when firing rate for in field fixations is higher than out of field
                 %for fixation ?->in vs ?->out
-                gaps = findgaps(list_sig_ind{2,unit});
-                pass2 = 0;
-                if ~isempty(gaps)
-                    for g = 1:size(gaps,1)
-                        gp = gaps(g,:);
-                        gp(gp == 0) = [];
-                        if length(gp) > 1.5*smval %2 standard deviation
-                            pass2 = 1;
-                            break
-                        end
-                    end
+                if sum(list_sig_times{2,unit}) > 0
+                    pass2 = 1;
+                else
+                    pass2 = 0;
                 end
                 
                 if pass == 1 && pass2 == 1 %both show sig difference
@@ -240,10 +226,12 @@ for monk =2:-1:1
                     sig_p_list = [sig_p_list 0];
                 end
                 
-                
                 %---Firing Rate Curve Properties for Sequence Task---%
-                all_peak_seq = [all_peak_seq stats_across_tasks(4,unit)]; %peak firing rate during seq
+                if ~isnan(stats_across_tasks(4,unit))
+                    all_peak_seq = [all_peak_seq stats_across_tasks(4,unit)]; %peak firing rate during seq
+                end
                 all_seq_peak_times = [all_seq_peak_times stats_across_tasks(3,unit)];%peak firing time seq
+                
                 
                 %---Firing Rates Between Sequence and List Tasks---%
                 %change in firing rate (list_fr-seq_fr)/list_fr
@@ -256,25 +244,34 @@ for monk =2:-1:1
                 end
                 
                 if ~isempty(in_out_sequence{unit}) %at least 1 item in field and 1 item out of field
-                    if  isempty(seq_sig_ind{unit}) %no significant difference
+                    if  isempty(sequence_sig_times{unit}) %no significant difference
                         sig_p_seq = [sig_p_seq 0];
                     else
                         seq_in_out = in_out_sequence{unit};
                         in_curve = nandens(fixation_firing(seq_in_out == 1,:),smval,'gauss',Fs,'nanflt');%smoothed firing rates for in field fixations
                         out_curve = nandens(fixation_firing(seq_in_out == 0,:),smval,'gauss',Fs,'nanflt');%smoothed firing rates for out of field fixations
-                        pos_seq_sig_ind = find((in_curve-out_curve) > sequence_95_curve{1,unit}); %find expected in field > out of field
-                        neg_seq_sig_ind = find((in_curve-out_curve) < sequence_95_curve{2,unit}); %find unexpected in field < out of field
+                        pos_ind = (in_curve-out_curve) > 0; %find expected in field > out of field
+                        pos_ind(sequence_sig_times{unit} == 0) = 0; %remove times that are not significant
+                        pos_ind = find(pos_ind);
+                        neg_ind =  (in_curve-out_curve) < 0 ; %find unexpected in field < out of field
+                        neg_ind(sequence_sig_times{unit} == 0) = 0; %remove times that are not significant
+                        neg_ind = find(neg_ind); 
+
+                        
+                        if isnan(stats_across_tasks(4,unit))
+                            all_peak_seq = [all_peak_seq max(in_curve)]; %peak firing rate during seq
+                        end
                         
                         %find contiguous positive significant regions that
                         %at least 2std in length
                         rmv = [];
-                        gaps_pos = findgaps(pos_seq_sig_ind); %find breaks
+                        gaps_pos = findgaps(pos_ind); %find breaks
                         total_pos = 0;%total postive time
                         if ~isempty(gaps_pos)
                             for g = 1:size(gaps_pos,1)
                                 gp = gaps_pos(g,:);
                                 gp(gp == 0) = [];
-                                if length(gp) < 1.5*smval %3  standard deviations
+                                if length(gp) < 50;%1.5*smval %3  standard deviations
                                     rmv = [rmv g];
                                 else
                                     total_pos = total_pos+length(gp);
@@ -288,13 +285,13 @@ for monk =2:-1:1
                         %find contiguous positive significant regions that
                         %at least 2std in length
                         rmv = [];
-                        gaps_neg = findgaps(neg_seq_sig_ind);  %find breaks
+                        gaps_neg = findgaps(neg_ind);  %find breaks
                         total_neg = 0;%total negative time
                         if ~isempty(gaps_neg)
                             for g = 1:size(gaps_neg,1)
                                 gp = gaps_neg(g,:);
                                 gp(gp == 0) = [];
-                                if length(gp) < 1.5*smval %3  standard deviations
+                                if length(gp) < 50;%1.5*smval %3  standard deviations
                                     rmv = [rmv g]; %remove time points that are too short
                                 else
                                     total_neg = total_neg+length(gp);
@@ -347,6 +344,7 @@ for monk =2:-1:1
                     end
                 else
                     sig_p_seq = [sig_p_seq NaN]; %no shapes in and out of field so keep parallel structure
+                    all_peak_seq = [all_peak_seq NaN];
                 end
                 
                 
@@ -377,7 +375,7 @@ nans = find(isnan(all_list_peak_times));
 for i = 1:length(nans)
     disp(['Removing ' all_place_cell_unit_names{nans(i)}])
 end
-
+%%
 %---Second Copy Relevant Figures to Summary Directory---%
 for unit = 1:length(all_place_cell_unit_names)
     sub_dir1 = 'Place Cells Fixation Analysis\Best Place Cells Fixation Analysis\';
@@ -522,7 +520,6 @@ colorbar
 figure
 plot([-twin1:twin2-1],nanmean(all_in_rates))
 hold on
-plot(i-twin1,m,'r*')
 yl = ylim;
 plot([0 0],[yl(1) yl(2)],'k--');
 plot([-44 -44],[yl(1) yl(2)],'k--')
@@ -556,7 +553,7 @@ for n = 1:size(all_in_rates,1)
     end
     
 end
-
+%%
 
 figure
 subplot(1,2,1)
@@ -605,7 +602,7 @@ for c = 1:length(place_coverage);
 end
 all_place_coverage  = all_place_coverage./coverage_count;
 all_place_coverage = all_place_coverage/sum(sum(all_place_coverage));
-
+%%
 figure
 subplot(2,2,1)
 imagesc(all_coverage)
@@ -663,7 +660,8 @@ disp([num2str(sum(sig_p_seq == -1)) ' (' num2str(100*sum(sig_p_seq == -1)/sum(~i
 %%
 figure
 subplot(2,2,1)
-histogram(100*all_context_gain,24)
+hist(100*all_context_gain,24)
+xlim([-300 100])
 xlabel('Task Preference (% Change)')
 ylabel('Count')
 box off
@@ -671,11 +669,11 @@ axis square
 title(['Median = ' num2str(nanmedian(100*all_context_gain),2) ' %'])
 
 acg2 = all_context_gain2;
-acg2(acg2 > 5) = 5;
+acg2(acg2 > 4) = 5;
 acg2(acg2 < 1) = -1./acg2(acg2 <1);
 
 subplot(2,2,2)
-histogram(acg2,25)
+hist(acg2,25)
 xlabel('Task Gain (Relative)')
 ylabel('Count')
 set(gca,'Xtick',[-4 -3 -2 -1 0 1 2 3 4 5])
