@@ -10,6 +10,8 @@ function  Place_Cell_Fixation_Analysis(data_dir,figure_dir,session_data,predict_
 %tasks.
 %
 % Code rechecked bugs January 3, 2017 SDK
+% Code re-rechecked for bugs February 3, 2017 SDK after significant
+% modifications mostly around Maris method of mulitple comarpisons corrections
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -30,7 +32,6 @@ imageY = 600;
 img_on_code = 23; %cortex code when image turns on
 img_off_code = 24; %cortex code when image turns off
 ITIstart_code = 15; %start of ITI/trial
-event_codes = [23 24 25 26 27 28 29 30]; %Sequence task: odd indeces item on, even indeces item off
 numshuffs = 10000; %number of shuffles for resmampling
 
 min_fix_dur = 100; %100 ms %don't want fixations that are too short since won't get a good idea of firing pattern
@@ -100,6 +101,7 @@ H = define_spatial_filter(filter_width);
 %---Pre-allocate space for List Fixations Inside vs Outside Field Analysis---%
 list_fixation_locked_firing = cell(1,num_units); %firing rate locked to fixations
 saccade_direction = cell(1,num_units); %saccade direction organized the same as list_fixation_locked_firing
+saccade_amplitude = cell(1,num_units); %saccade direction organized the same as list_fixation_locked_firing
 area = NaN(1,num_units); %area of place field
 all_place_field_matrix = cell(1,num_units); %place field location 1 for in 0 for out, NaN for no coverage
 list_sig_times = cell(2,num_units); %%time points > 95% confidence interval, corrected for multiple comparisons using Maris method
@@ -112,7 +114,7 @@ in_out = cell(1,num_units); %organized same as list_fixation_locked_firing for f
 %---Pre-allocate space for Fixations during Sequence Trials Analysis---%
 sequence_fixation_locked_firing = cell(4,num_units);%firing rate locked to fixations organized by item
 sequence_sig_times = cell(2,num_units);  %shuffled 95% confidence interval for fixation in field vs out of field, row 1 97.5% row 2 2.5%
-seq_sig_times = cell(1,num_units);%time points > 95% confidence interval
+sequence_sig_times = cell(1,num_units);%time points > 95% confidence interval
 all_which_sequence = cell(1,num_units); %which sequence
 trial_nums = cell(1,num_units); %trial numbers
 in_out_sequence = cell(1,num_units); %1 for sequence items inside 0 for suquence items outside NaN for items on border
@@ -124,17 +126,10 @@ stats_across_tasks = NaN(4,num_units);
 %4) sequence peak
 
 for unit = 1:num_units
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%---Determine if Unit Passes 95% for both Skaggs and Stability--%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    if isnan(spatial_info.shuffled_rate_prctile(unit))
-        continue %spatial analysis wasn't run on this unit
-    elseif (spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.spatialstability_halves_prctile(unit) < 95)
-        continue %unit not spatial or correlated in any sense
+
+    if isempty(eyepos{unit})
+        continue %no data for this neuron
     end
-    
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine List Firing rate Locked to Fixations Inside vs Outside Field---%%%
@@ -161,6 +156,8 @@ for unit = 1:num_units
     %3) first fixation out of field: in -> out
     %4) fixation out of field but not first: out-> out
     fix_locked_firing = NaN(3000,(twin1+twin2)); %spike trains locked to fixations
+    saccade_direction{unit} = NaN(1,3000);%saccade directions
+    saccade_amplitude{unit} = NaN(1,3000);%saccade amplitudes
     
     fix_ind = 1; %fixation # so can track in variables above
     fixationstats = absolute_fixationstats; %reload because written over below
@@ -229,6 +226,8 @@ for unit = 1:num_units
                     if sacamp < min_sac_amp %prior saccade is too small so ignore
                         continue
                     end
+                    saccade_amplitude{unit}(fix_ind) = sacamp;
+
                     
                     prior_fix_in_out = [];
                     %determine if prior fixation was in or out of place field
@@ -277,22 +276,35 @@ for unit = 1:num_units
                     temp(fix_spikes) = 1;
                     fix_locked_firing(fix_ind,:) = temp;
                     
+                    %reflix y otherwise everything is flipped
+                    fixy = fixations(2,f);
+                    last_fixy = fixations(2,f-1);
                     saccade_direction{unit}(fix_ind) = atan2d(fixy-last_fixy,fixx-last_fixx);
+
                     fix_ind = fix_ind+1;
                 end
             end
         end
     end
     
-    %remove excess NaNs associated with error trials
-    fix_in_out = laundry(fix_in_out);
+    %remove excess NaNs
+    saccade_direction = laundry(saccade_direction);
+    saccade_amplitude = laundry(saccade_amplitude);
     fix_locked_firing = laundry(fix_locked_firing);
+    fix_in_out = laundry(fix_in_out);
     
     %store variables across units for later access
     list_fixation_locked_firing{unit} = fix_locked_firing;
     in_out{unit} = fix_in_out;
-    saccade_direction = laundry(saccade_direction);
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%---Determine if Unit Passes 95% for both Skaggs and Stability--%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if isnan(spatial_info.shuffled_rate_prctile(unit))
+        continue %spatial analysis wasn't run on this unit
+    elseif (spatial_info.shuffled_rate_prctile(unit) < 95) && (spatial_info.spatialstability_halves_prctile(unit) < 95)
+        continue %unit not spatial
+    end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neuron Fires Faster for Fixations in the Field vs Out of Field---%%%
@@ -314,16 +326,16 @@ for unit = 1:num_units
         %for fixations out->in vs out->out
         ind = randperm(length(in_or_out));
         shuff_in_or_out = in_or_out(ind);%randomly assign fixations as in or out
-        shuff_in_curve = nanmean(firing_rate_curve(shuff_in_or_out == 1,:));
-        shuff_out_curve = nanmean(firing_rate_curve(shuff_in_or_out == 4,:));
-        all_curves(shuff,:) = shuff_in_curve-shuff_out_curve; %calculate shuffled differeence
+        shuff_in_curve = nanmean(firing_rate_curve(shuff_in_or_out == 1,:)); %out->in
+        shuff_out_curve = nanmean(firing_rate_curve(shuff_in_or_out == 4,:));%out->out
+        all_curves(shuff,:) = shuff_in_curve-shuff_out_curve; %calculate shuffled difference
         
         %for fixations ?->in vs ?->out in case not enough samples for the one above
-        ind = randperm(length(in_or_out2));
-        shuff_in_or_out = in_or_out2(ind);
-        shuff_in_curve = nanmean(all_firing_rate_curve(shuff_in_or_out == 1 | shuff_in_or_out == 2,:));
-        shuff_out_curve = nanmean(all_firing_rate_curve(shuff_in_or_out == 3 | shuff_in_or_out == 4,:));
-        all_curves2(shuff,:) = shuff_in_curve-shuff_out_curve; %calculate shuffled differeence
+        ind2 = randperm(length(in_or_out2));
+        shuff_in_or_out = in_or_out2(ind2);
+        shuff_in_curve = nanmean(all_firing_rate_curve(shuff_in_or_out == 1 | shuff_in_or_out == 2,:)); %?->in
+        shuff_out_curve = nanmean(all_firing_rate_curve(shuff_in_or_out == 3 | shuff_in_or_out == 4,:));%?->out
+        all_curves2(shuff,:) = shuff_in_curve-shuff_out_curve; %calculate shuffled difference
     end
     
     %for fixations out->in vs out->out
@@ -331,13 +343,13 @@ for unit = 1:num_units
     list_in_curve = in_curve; %firing rate curve for fixations in the field
     out_curve = nanmean(firing_rate_curve(in_or_out == 4,:)); %firing rate fo fixations out of the filed
     observed_diff = in_curve-out_curve; %observed difference in firing rate 
-    [~,list_sig_times{1,unit}] = cluster_level_statistic(observed_diff,all_curves,1); %multiple comparision corrected significant indeces
+    [~,list_sig_times{1,unit}] = cluster_level_statistic(observed_diff,all_curves,1,smval); %multiple comparision corrected significant indeces
     
     %for fixations ?->in vs ?->out in case not enough samples for the one above    
     in_curve = nanmean(all_firing_rate_curve(in_or_out2 == 1 | in_or_out2 == 2,:));
     out_curve = nanmean(all_firing_rate_curve(in_or_out2 == 3 | in_or_out2 == 4,:));
     observed_diff = in_curve-out_curve; %observed difference in firing rate 
-    [~,list_sig_times{2,unit}] = cluster_level_statistic(observed_diff,all_curves2,1); %multiple comparision corrected significant indeces
+    [~,list_sig_times{2,unit}] = cluster_level_statistic(observed_diff,all_curves2,1,smval); %multiple comparision corrected significant indeces
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -351,10 +363,8 @@ for unit = 1:num_units
     %find peaks that were in significant period and remove those that weren't
     rmv = [];
     for l = 1:length(LOCS);
-        if ~any(list_sig_times{1,unit} == LOCS(l))%relaible during ?->in
-            if ~any(list_sig_times{2,unit} == LOCS(l)) %relaible duringout->in
-                rmv = [rmv l];
-            end
+        if list_sig_times{1,unit}(LOCS(l)) == 0 && list_sig_times{2,unit}(LOCS(l)) == 0  %is it at a reliable time
+            rmv = [rmv l];
         end
     end
     LOCS(rmv) = [];
@@ -364,7 +374,7 @@ for unit = 1:num_units
         LOCS(PKS < 0.66) = [];
     end
     if ~isempty(LOCS)
-        LOCS = LOCS(1);
+        LOCS = LOCS(1);%if multiple peaks take first peak
         stats_across_tasks(1,unit) = LOCS; %time of peak
         stats_across_tasks(2,unit) = list_in_curve(LOCS); %peak firing rate
     end
@@ -568,16 +578,7 @@ for unit = 1:num_units
     successful_sequence_trials = laundry(successful_sequence_trials); %remove nans
     which_sequence = laundry(which_sequence); %remove nans
     all_which_sequence{unit} = which_sequence; %store for later
-    
     num_trials = length(successful_sequence_trials); %number of sequence trials
-    event_times = NaN(length(successful_sequence_trials),8); %item on/off times by trial
-    for t = 1:num_trials
-        trial_start = cfg.trl(successful_sequence_trials(t)).alltim(cfg.trl(successful_sequence_trials(t)).allval == ITIstart_code);
-        for event = 1:length(event_codes);
-            event_times(t,event) = cfg.trl(successful_sequence_trials(t)).alltim(cfg.trl(successful_sequence_trials(t)).allval...
-                == event_codes(event))-trial_start;
-        end
-    end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---process eye data locked to trial events---%%%
@@ -690,7 +691,7 @@ for unit = 1:num_units
                 %away from border of image. Median eye tracking error (fixation accuracy) 
                 %on this task ~0.56 dva so should be ok with 0.5 and most
                 %fixations within 1 dva
-                if place_field_matrix(yloc-12,xloc) == 1&& place_field_matrix(yloc-12,xloc-12) == 1 &&...
+                if place_field_matrix(yloc-12,xloc) == 1 && place_field_matrix(yloc-12,xloc-12) == 1 &&...
                         place_field_matrix(yloc-12,xloc+12) == 1 && place_field_matrix(yloc+12,xloc) == 1 && ...
                         place_field_matrix(yloc+12,xloc-12) == 1 && place_field_matrix(yloc+12,xloc+12) == 1 && ...
                         place_field_matrix(yloc,xloc+12) == 1 && place_field_matrix(yloc,xloc-12) == 1
@@ -715,8 +716,9 @@ for unit = 1:num_units
         seq_in_out = [];
         fixation_firing = [];
         for c = 1:4
-            fixation_firing = [fixation_firing; sequence_fixation_locked_firing{c,unit}];
             for seq = 1:2
+                fixation_firing = [fixation_firing; ...
+                    sequence_fixation_locked_firing{c,unit}(which_sequence(trial_nums{c,unit}) == seq,:)];
                 if  sequence_inside(seq,c) == 1;
                     seq_in_out = [ seq_in_out ones(1,sum(which_sequence(trial_nums{c,unit}) == seq))];
                 elseif isnan(sequence_inside(seq,c))
@@ -739,7 +741,7 @@ for unit = 1:num_units
         in_curve = nandens(fixation_firing(seq_in_out == 1,:),smval,'gauss',Fs,'nanflt');
         out_curve = nandens(fixation_firing(seq_in_out == 0,:),smval,'gauss',Fs,'nanflt');
         observed_diff = in_curve-out_curve; %observed difference in firing rate 
-        [~,seq_sig_times{unit}] = cluster_level_statistic(observed_diff,all_curves2,2); %multiple comparision corrected significant indeces
+        [~,sequence_sig_times{unit}] = cluster_level_statistic(observed_diff,all_curves2,2,smval); %multiple comparision corrected significant indeces
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Determine Peak and Time of Peak Firing Rate aligned to Fixation----%%%
@@ -752,7 +754,7 @@ for unit = 1:num_units
         %find peaks that were in significant period and remove those that weren't
         rmv = [];
         for l = 1:length(LOCS);
-            if ~any(seq_sig_times{unit} == LOCS(l))
+            if sequence_sig_times{unit}(LOCS(l)) == 0 %is it at a reliable time?
                 rmv = [rmv l];
             end
         end
@@ -850,7 +852,7 @@ for unit = 1:num_units
             yl(1) = 0;
             ylim(yl);
         end
-        gaps = findgaps(find(seq_sig_times{unit}));
+        gaps = findgaps(find(sequence_sig_times{unit}));
         if ~isempty(gaps)
             for g = 1:size(gaps,1)
                 gp = gaps(g,:);
@@ -951,5 +953,6 @@ save([data_dir task_file(1:8) '-Place_Cell_Analysis.mat'],...
     'twin1','twin2','smval','list_fixation_locked_firing','in_out',...
     'task_file','area','stats_across_tasks','unit_stats','sequence_fixation_locked_firing',...
     'all_place_field_matrix','trial_nums','numshuffs','in_out_sequence',...
-    'all_which_sequence','saccade_direction','list_sig_times','sequence_sig_times')
+    'all_which_sequence','saccade_direction','list_sig_times','sequence_sig_times',...
+    'saccade_amplitude')
 end
