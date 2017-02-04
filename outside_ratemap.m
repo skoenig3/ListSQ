@@ -1,5 +1,6 @@
 function [ratemap,filtered_time] = outside_ratemap(eyepos,Fs,binsize,H,spike_times)
-% modified same function names minus _outside Seth Konig 9.23.16
+% modified 'get_firing_rate_map' Seth Konig 9.23.16
+% code rechecked for bugs 1/22/2017 SDK
 
 
 filtered_time = filter_time_outside_image(eyepos,Fs,binsize,H);
@@ -12,7 +13,7 @@ ratemap = filtered_space./filtered_time;
         spatial_time = time_per_pixel_outside(eyepos,Fs);
         filtered_time = bin2(spatial_time,binsize,binsize);
         zero_bins = (filtered_time == 0);
-        filtered_time = imfilter(filtered_time,H);
+        filtered_time = imfilter(filtered_time,H,'replicate');
         filtered_time(zero_bins) = NaN;
         filtered_time = filtered_time(end:-1:1,:); %flip so rightside up
     end
@@ -21,7 +22,7 @@ ratemap = filtered_space./filtered_time;
         %caluclate total spikes over space
         [firing_location] = pixel_spike_location_outside(eyepos,spike_times);
         filtered_space = bin2(firing_location,binsize,binsize);
-        filtered_space = imfilter(filtered_space,H);
+        filtered_space = imfilter(filtered_space,H,'replicate');
         filtered_space = filtered_space(end:-1:1,:); %flip so rightside up
     end
 
