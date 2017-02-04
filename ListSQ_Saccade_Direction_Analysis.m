@@ -17,7 +17,7 @@ task = 'ListSQ';
 window_width = 100; %time around peak to take for firing rate, based on FWHM of place cell fixation analysis
 imageX = 800; %horizontal image size
 imageY = 600; %vertical image size
-numshuffs = 1000; %number of times to shuffled/permutate saccade direction analysis
+numshuffs = 10000; %number of times to shuffled/permutate saccade direction analysis
 
 bin_deg = 1; %number of degrees per bin
 bin_deg2 = 45; %initial degree bins to determine time of peak direction modualtion
@@ -53,6 +53,8 @@ mrls.out2out_shuffled_prctile = NaN(1,num_units);%MRLs percentile for out2out fi
 
 uniformity_pvalue = NaN(3,num_units); %circ_rtest...row 1: all fixations, row 2: in2in, row3: out2out
 binned_firing_rate_curves = cell(3,num_units); %row 1: all fixations, row 2: in2in, row3: out2out
+
+all_windows = cell(1,num_units);%window used to calculate MRLs
 
 for unit = 1:num_units
     if isempty(list_fixation_locked_firing{unit}) %no valid trials so go to next unit
@@ -162,6 +164,7 @@ for unit = 1:num_units
     [~,time_of_max_modulation] = ind2sub(size(curves(:,100:400)),time_of_max_modulation); %got to convert back into time index
     time_of_max_modulation = time_of_max_modulation+100; %since ingored the first 100 ms before
     window = time_of_max_modulation-((window_width/2)-1):time_of_max_modulation+window_width/2; %take window around peak
+    all_windows{unit} = window;
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Determine if Unit is Significantly Modulated by Saccade Direction--%
