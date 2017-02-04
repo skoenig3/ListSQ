@@ -42,7 +42,7 @@ switch task_type
             if ~isnan(peak_firing_rate(1,unit))
                 clims = NaN(2,3);
                 num_trials_str = [' n_ = ' num2str(size(spike_times{unit},1))];
-
+                
                 figure
                 
                 %---draw raw spikes on all images all locations---%
@@ -100,7 +100,7 @@ switch task_type
                 axis off
                 axis equal
                 
-               
+                
                 clims(:,2) = caxis;
                 max_fr = prctile(nov_ratemap(:),97.5); % the ~97.5%-tile
                 clims(2,2) = max_fr;
@@ -174,55 +174,92 @@ switch task_type
     case 'cvtnew_spatial'
         binsize = smval(1); %number of pixels per spatial bing
         filter_width = smval(2); %std of 2D gaussian smoothing filter
-        filter_size = filter_width*10;
-        H = fspecial('gaussian',filter_size,filter_width);
+        H = define_spatial_filter(filter_width);
+        
         
         for unit = 1:num_units
             if ~isempty(position{unit})
                 figure
                 
-                make_spike_jittered_plot(position{unit},spike_times{unit},[1 2],1)
+                %spike postion overlaying dot position
+                make_spike_jittered_plot(position{unit},spike_times{unit},[2 3],1)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 xlim([100 700])
                 ylim([0 600])
+                axis off
+                axis square
                 
-                subplot(1,2,2)
-                filtered_time = filter_time(position{unit},imageX,imageY,Fs,binsize,H);
-                filtered_time(filtered_time == 0) = NaN; %can cause aribitrarily high firing rates 25+ ms or more
-                filtered_space = filter_space(position{unit},spike_times{unit},imageX,imageY,binsize,H);
-                imagesc(filtered_space./filtered_time);
-                
-                fr = sort(filtered_space(1:end)./filtered_time(1:end));
-                fr(isnan(fr)) = [];
-                [cmin,cmax] = caxis;
-                if length(fr) > 20
-                    cmax = fr(round(0.99*length(fr)));% the ~99%-tile
-                end
-                
-                colormap('jet')
-                c = colormap;
-                diffc = cmax-cmin;
-                cmin = cmin-0.15*diffc;
-                caxis([cmin cmax]);
-                c(1,:) = [1 1 1];%turn nans in to white pixels
-                colormap(c);
-                
+                %firing ratemap
+                [ratemap,~] = get_firing_rate_map_cvtnew({position{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all');
+                maxfr = prctile(ratemap(:),97.5);
+                subplot(2,3,4)
+                h = imagesc(ratemap);
+                set(h,'alphadata',~isnan(ratemap));
                 axis off
                 axis square
                 colorbar
+                colormap('jet')
+                clim = caxis;
+                caxis([clim(1) maxfr])
                 
-                title_str = ['peak rate = ' num2str(max(fr),3) ' Hz'];
-                if spatial_info.shuffled_rate_prctile(unit) >= 90;
-                    title_str = [title_str ' \n Bits = ' num2str(spatial_info.rate(unit),3) ' ' ...
-                        num2str(spatial_info.shuffled_rate_prctile(unit),3) '%%'];
+                title_str = ['peak rate = ' num2str(maxfr,3) ' Hz'];
+                if spatial_info.shuffled_rate_prctile(unit) > 90;
+                    title_str = [title_str ' \n Bits ' num2str(spatial_info.shuffled_rate_prctile(unit),3) '%%'];
                 end
-                if spatial_info.shuffled_spatialstability_prctile(unit) >= 90;
-                    title_str = [title_str  '\n r = ' num2str(spatial_info.spatialstability(unit),2) ' ' ...
-                        num2str(spatial_info.shuffled_spatialstability_prctile(unit),2) '%%'];
+                if spatial_info.spatialstability_halves_prctile(unit) > 90;
+                    title_str = [title_str  '\n r = ' num2str(spatial_info.spatialstability_halves(unit),2) ' ' ...
+                        num2str(spatial_info.spatialstability_halves_prctile(unit),2) '%%'];
                 end
                 title(sprintf(title_str))
                 
+                %spike position overlaying dot position for 1st half of recording
+                num_trials = floor(size(spike_times{unit},1)/2);
+                make_spike_jittered_plot(position{unit}(1:2*num_trials,:),spike_times{unit}(1:num_trials,:),[2 3],2)
+                set(gca,'Xcolor','w')
+                set(gca,'Ycolor','w')
+                xlim([100 700])
+                ylim([0 600])
+                axis off
+                axis square
+                title('1st Half')
+                
+                %spike position overlaying dot position for 2nd half of recording
+                make_spike_jittered_plot(position{unit}(2*num_trials+1:end,:),spike_times{unit}(num_trials+1:end,:),[2 3],5)
+                set(gca,'Xcolor','w')
+                set(gca,'Ycolor','w')
+                xlim([100 700])
+                ylim([0 600])
+                axis off
+                axis square
+                title('2nd Half')
+                
+                
+                num_not_nans = sum(~isnan(spike_times{unit}));
+                indeces = find(num_not_nans > 25);
+                
+                %firing rate curve aligned to do on
+                subplot(2,3,3)
+                dofill2(1:length(indeces),spike_times{unit}(:,indeces),'black',1,60);
+                xlim([0 2000])
+                yl = ylim;
+                if yl(1) < 0
+                    ylim([0 yl(2)])
+                end
+                xlabel('Time from Dot On (ms)')
+                ylabel('Firing Rate (Hz)')
+                
+                %raster aligned to dot on
+                subplot(2,3,6)
+                [trial,time] = find(spike_times{unit}(:,indeces) == 1);
+                if ~isempty(trial)
+                    plot(time,trial,'.k')
+                    xlim([0 2000])
+                    ylim([0 max(trial)+1]);
+                end
+                ylabel('Trial #')
+                xlabel('Time from Dot On (ms)')
+                box off
                 
                 if unit_names.multiunit(unit)
                     subtitle(['Multiunit ' unit_names.name{unit} ]);

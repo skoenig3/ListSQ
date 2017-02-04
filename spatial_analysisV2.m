@@ -19,15 +19,7 @@ function spatial_analysisV2(data_dir,figure_dir,session_data,task)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Set important task parameters---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-image_on_twin = 500;%how much time to ignore eye movements for to remove
-%strong visual response (though some may last longer) combined with strong central bias
-
 numshuffs = 1000;% # of shuffles for bootstraspping, recommend this is at least 1000
-binsize = 12; %pixels per bin spatial bin in either dimension 1/2 dva
-filter_width = 6; %std of 2D guassian filter ~ 3 dva, could use 2 dva (4) as well
-H = define_spatial_filter(filter_width);
-info_type = 'spatial';%type of mutual information analysis to perform
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---import task and unit data---%%%
@@ -54,7 +46,7 @@ end
 %remove units with too few trials
 %these are the absolute minimum data required to do data analysis
 if strcmpi(task,'cvtnew')
-    min_blks = 1; %~100 trials may want to change
+    min_blks = 2; %~100 trials may want to change
 else
     min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
     %this means at least 64 viewed images counting novel+repeat presentations
@@ -65,12 +57,19 @@ if all(isnan(valid_trials(1,:)))
     return %since no valid units skip analysis
 end
 
+binsize = 12; %pixels per bin spatial bin in either dimension 1/2 dva
+filter_width = 6; %std of 2D guassian filter ~ 3 dva, could use 2 dva (4) as well
+H = define_spatial_filter(filter_width);
+
 switch task
     case {'cvtnew','CVTNEW'}
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---import & reformat data so that spikes are locked to dot position---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
+        info_type = 'spatial_cvtnew';%type of mutual information analysis to perform
+     
+        load([data_dir task_file(1:end-11) '-preprocessed.mat'],'meta');
         disp('Collecting Spike Locations')
         
         Fs = data(1).fsample; %should be 1000
@@ -79,8 +78,8 @@ switch task
         dot_clrchng_code = 27;
         bar_code_response = 4; %monkey made a move
         reward_code = 3;
-        imageX = 800; %horizontal size of the screen
-        imageY = 600; %horizontal size of the screen
+        imageX = 800;%528; %horizontal size of displayed dot positions
+        imageY = 600;%528 %horizontal size of displayed dot positions
         
         %preallocate space and parallel structure of cfg
         dotpos = cell(1,num_units);
@@ -120,36 +119,27 @@ switch task
         dotpos = laundry(dotpos);
         spike_times = laundry(spike_times);
         
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Spatial analysis and signifance testing---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         disp('Determining if neurons are spatially modulated')
-        
-        %--calculate peak firing rate---%
-        peak_firing_rate = NaN(1,num_units);
-        for unit = 1:num_units
-            trial_data{1} = dotpos{unit};
-            trial_data{2} = spike_times{unit};
-            
-            if nansum(nansum(trial_data{2})) == 0 %this occassiionally happens with really specifc/low firing rate neurons...
-                %and we don't want a NaN
-                peak_firing_rate(unit) = 0;
-                continue
-            end
-            [filtered_time] = filter_time(trial_data{1},imageX,imageY,Fs,binsize,H);
-            filtered_time(filtered_time == 0) = NaN;
-            [filtered_space] = filter_space(trial_data{1},trial_data{2},imageX,imageY,binsize,H);
-            
-            fr = filtered_space./filtered_time; %observed firing rate over space
-            peak_firing_rate(unit) = prctile(fr(1:end),99);%don't want to grab outliers
-        end
-        
-        info_type = 'spatial_cvtnew';%type of mutual information analysis to perform
-        
+
+        %---Determine if Neuron is more spatial than chance---%
         spatial_info.rate = NaN(1,num_units); %the observed information rate in bits/sec
-        spatial_info.spatialstability = NaN(1,num_units); %the observed spatial correlation over time
         spatial_info.shuffled_info_rate = cell(1,num_units); %bootstrapped information rate in bits/sec expected by chance from spike train
-        spatial_info.shuffled_spatialstability = cell(1,num_units); %bootstrapped spatial stability expected by chance from spike train
+        spatial_info.shuffled_rate_prctile = NaN(1,num_units);
+        
+        %spatial correlation first vs second half row 1 spearman row 2 Kendall
+        spatial_info.spatialstability_halves = NaN(1,num_units);
+        spatial_info.shuffled_spatialstability_halves = cell(1,num_units);
+        spatial_info.spatialstability_halves_prctile = NaN(1,num_units);
+        
+        %spatial correlation even and odd trials row 1 spearman row 2 Kendall
+        spatial_info.spatialstability_even_odd = NaN(1,num_units);
+        spatial_info.shuffled_spatialstability_even_odd = cell(1,num_units);
+        spatial_info.spatialstability_even_odd_prctile = NaN(1,num_units);
+        
         trial_data{3} = [imageX imageY];
         for unit = 1:num_units
             
@@ -159,24 +149,30 @@ switch task
             [observed_info_rate,shuffled_info_rate]...
                 = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
             
+            %skaggs information score
             spatial_info.rate(unit) = observed_info_rate.skaggs;
-            spatial_info.spatialstability(unit) = observed_info_rate.spatialstability;
             spatial_info.shuffled_info_rate{unit} = shuffled_info_rate.skaggs;
-            spatial_info.shuffled_spatialstability{unit} = shuffled_info_rate.spatialstability;
+            spatial_info.shuffled_rate_prctile(unit) = 100*sum(...
+                spatial_info.rate(unit) > spatial_info.shuffled_info_rate{unit})/numshuffs;
+            
+            %spatial correlation first half vs second half
+            spatial_info.spatialstability_halves(unit) = observed_info_rate.spatialstability_halves;
+            spatial_info.shuffled_spatialstability_halves{unit} = shuffled_info_rate.spatialstability_halves;
+            spatial_info.spatialstability_halves_prctile(unit) = ...
+                100*sum(spatial_info.spatialstability_halves(unit) > ...
+                spatial_info.shuffled_spatialstability_halves{unit})/numshuffs;
+            
+            
+            %spatial correlation for even and odd trials
+            spatial_info.spatialstability_even_odd(unit) = observed_info_rate.spatialstability_even_odd;
+            spatial_info.shuffled_spatialstability_even_odd{unit} =...
+                shuffled_info_rate.spatialstability_even_odd;
+            spatial_info.spatialstability_even_odd_prctile(unit) = ...
+                100*sum(spatial_info.spatialstability_even_odd(unit) > ...
+                spatial_info.shuffled_spatialstability_even_odd{unit})/numshuffs;
         end
         
-        %estimate the significance threshold has the 95-percentile of the
-        %bootstrapped data
-        for unit = 1:num_units
-            if ~isempty(spatial_info.shuffled_info_rate{unit})
-                spatial_info.shuffled_rate_prctile(unit) = ...
-                    100*sum(spatial_info.rate(unit) > ...
-                    spatial_info.shuffled_info_rate{unit})/numshuffs;
-                spatial_info.shuffled_spatialstability_prctile(unit) = ...
-                    100*sum(spatial_info.spatialstability(unit) > ...
-                    spatial_info.shuffled_spatialstability{unit})/numshuffs;
-            end
-        end
+     
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Plot and Save Figures of Results---%%%
@@ -197,6 +193,11 @@ switch task
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Reformat data so that spikes are locked to eye movements---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        image_on_twin = 500;%how much time to ignore eye movements for to remove
+        %strong visual response (though some may last longer) combined with strong central bias
+        
+        info_type = 'spatial';%type of mutual information analysis to perform
+ 
         disp('Collecting Spike Locations')
         
         %set/get some general important info
