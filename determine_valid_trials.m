@@ -6,7 +6,28 @@ function valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_un
 % Code rechecked ListSQ section for bugs October 17, 2016 SDK
 
 if strcmpi(task,'cvtnew')
-    trials_per_block = 100;
+    trials_per_block = 100; %approximately, varies slightly depending on path length
+    
+    num_trials = length(cfg.trl);
+    %NaNs are for start and end trials otherwise cut
+    valid_trials(1,isnan(valid_trials(1,:))) = 1;
+    valid_trials(2,isnan(valid_trials(2,:))) = num_trials;
+    
+    for unit = 1:num_units
+        start_end = valid_trials(:,unit);
+        if isnan(start_end(1)) %NaNs meant first trial was usable
+            start_end(1) = 1;
+        end
+        if isnan(start_end(2))%NaNs meant last trial was usable
+            start_end(2) = length(cfg.trl);
+        end
+        start_end(start_end == 0) = 1; %set 0 to 1 for indexing during next line
+        num_blks = floor((start_end(2)-start_end(1)+1)/trials_per_block);
+        
+        if num_blks < min_blks
+            valid_trials(:,unit) = NaN;
+        end
+    end
     
     
 elseif strcmpi(task,'ListSQ')
