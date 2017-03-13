@@ -48,10 +48,6 @@ image_on_firing_rates = []; %image on 1 second window
 long_image_on_firing_rates = [];%image on 5 second window
 image_off_firing_rates = []; %image off
 
-short_durs =[];
-long_durs = [];
-FWHM =[];
-
 monkeys = {'Vivian','Tobii'};
 figure_dir = {};
 for monk =2:-1:1
@@ -111,12 +107,6 @@ for monk =2:-1:1
             continue
         end
         
-        if exist([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat'],'file') %want to remove later
-            load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']);
-        else
-            continue
-        end
-        
         disp(task_file(1:8))
         if exist([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat'],'file') %want to remove later
             load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']) %visual response analysis
@@ -142,9 +132,7 @@ for monk =2:-1:1
                 
                 
                 %---Unit Test Significance and Firing Rate Curves---%
-                if strcmpi([task_file(1:8) '_' unit_stats{1,unit}],'PW141008_sig002c'); %was found to be unreliable spatial unit so don't use
-                    spatialness = [spatialness NaN];
-                elseif (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+                if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
                     spatialness = [spatialness 1]; %place cell
                 else
                     spatialness = [spatialness 0]; %non place cell
@@ -219,12 +207,27 @@ for monk =2:-1:1
                 %---Memory Responses---%
                 if visual_response_stats_short(end) == 1 %then visual responsive within 1 second window
                     if sum(sig_short{unit}) > 0
-                        memory_short = [memory_short 1];
                         gaps = findgaps(find(sig_short{unit}));
+                        rmv = [];
                         for g = 1:size(gaps,1)
                             gp = gaps(g,:);
                             gp(gp == 0) = [];
-                            short_durs = [short_durs length(gp)];
+                            if any(gp < twin1)
+                                if all(gp < twin1)
+                                    rmv = [rmv g];
+                                else
+                                    gp(gp < twin1) = [];
+                                    if length(gp) < smval
+                                        rmv = [rmv g];
+                                    end
+                                end
+                            end
+                        end
+                        gaps(rmv,:) = [];
+                        if sum(sum(gaps)) > 0
+                            memory_short = [memory_short 1];
+                        else
+                            memory_short = [memory_short 0];
                         end
                     else
                         memory_short = [memory_short 0];
@@ -233,14 +236,29 @@ for monk =2:-1:1
                     memory_short = [memory_short NaN];
                 end
                 
-                if visual_response_stats_long(end) == 1 % within 5 second window
+                if visual_response_stats_long(end) == 1 %then visual responsive within 5 second window
                     if sum(sig_long{unit}) > 0
-                        memory_long = [memory_long 1];
                         gaps = findgaps(find(sig_long{unit}));
+                        rmv = [];
                         for g = 1:size(gaps,1)
                             gp = gaps(g,:);
                             gp(gp == 0) = [];
-                            long_durs = [long_durs length(gp)];
+                            if any(gp < twin1)
+                                if all(gp < twin1)
+                                    rmv = [rmv g];
+                                else
+                                    gp(gp < twin1) = [];
+                                    if length(gp) < smval2
+                                        rmv = [rmv g];
+                                    end
+                                end
+                            end
+                        end
+                        gaps(rmv,:) = [];
+                        if sum(sum(gaps)) > 0
+                            memory_long = [memory_long 1];
+                        else
+                            memory_long = [memory_long 0];
                         end
                     else
                         memory_long = [memory_long 0];
@@ -248,6 +266,7 @@ for monk =2:-1:1
                 else
                     memory_long = [memory_long NaN];
                 end
+                
                 
                 %---Sliding Window Analysis Simialr to Jutras and Buffalo---%
                 if sum(sig_visual_response(unit,:)) == 0%nothing is significant
@@ -279,12 +298,16 @@ disp([num2str(sum(visual_response_stats_short == 0 & visual_response_stats_long 
 disp('-----------------------------------------------')
 disp([num2str(sum((visual_response_stats_short == 1 | visual_response_stats_long == 1) & spatialness == 1)) ' Place cells are Visual Response short or long'])
 disp([num2str(sum((visual_response_stats_short == 1) & spatialness == 1)) ' View Cells show Visual Response within 1 second'])
-disp([num2str(sum((visual_response_stats_long == 1) & spatialness == 1)) ' View Cells show Visual Response within 1 second'])
+disp([num2str(sum((visual_response_stats_long == 1) & spatialness == 1)) ' View Cells show Visual Response within 5 second'])
+disp('-----------------------------------------------')
+disp([num2str(sum(memory_long == 1 | memory_short == 1)) ' Show a Significant Memory Response'])
+disp([num2str(sum((memory_long == 1 | memory_short == 1) & (spatialness == 1))) ' Place Cells Show a Significant Memory Response'])
+
 %%
 %%---Copy Relevant Figures to Summary Directory---%
 for unit = 1:length(all_unit_names)
     sub_dir1 = 'Visual Response\';
-
+    
     %---Visual responsive neurons according to skaggs and correlation---%
     name1 = [all_unit_names{unit} '_Image_Visual Response.png'];
     if visual_response_stats_short(unit) == 1 || visual_response_stats_long(unit) == 1 %visually responsive
@@ -296,35 +319,35 @@ for unit = 1:length(all_unit_names)
                 [summary_directory 'Non Place\' name1])
         end
     end
-
+    
     %---Visual responsive neurons only according to sliding window---%
     if (visual_response_stats_short(unit) == 0 && visual_response_stats_long(unit) == 0) ...
             && (visual_response_stats_short_sliding(unit) == 1 || visual_response_stats_long_sliding(unit) == 1)
         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
             [summary_directory 'Sliding Window Only\' name1])
     end
-
+    
     %---Fixation on Cross Response---%
     name2 = [all_unit_names{unit} '_Visual Response_CrossHair.png'];
     if fixation_on_cross_status(unit) == 1
-         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
+        copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
             [summary_directory 'Cross Response\' name2])
     end
-
+    
     %---Image Off Response---%
     if image_off_status(unit) == 1
-         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
+        copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
             [summary_directory 'Image Off Response\' name2])
     end
     
     %---Memory Response---%
     name2 = [all_unit_names{unit} '_Image_Visual Response_Memory.png'];
     if memory_short(unit) == 1 %memory response within 1 second window
-         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
+        copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
             [summary_directory 'Memory\' name2])
     end
     if memory_long(unit) == 1 %memory response within 1 second window
-         copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
+        copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name2],...
             [summary_directory 'Memory\' name2])
     end
     

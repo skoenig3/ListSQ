@@ -176,8 +176,8 @@ switch task_type
         filter_width = smval(2); %std of 2D gaussian smoothing filter
         H = define_spatial_filter(filter_width);
         
-        
         for unit = 1:num_units
+            
             if ~isempty(position{unit})
                 figure
                 
@@ -212,28 +212,29 @@ switch task_type
                         num2str(spatial_info.spatialstability_halves_prctile(unit),2) '%%'];
                 end
                 title(sprintf(title_str))
-                
-                %spike position overlaying dot position for 1st half of recording
-                num_trials = floor(size(spike_times{unit},1)/2);
-                make_spike_jittered_plot(position{unit}(1:2*num_trials,:),spike_times{unit}(1:num_trials,:),[2 3],2)
+
+                path_number = unit_names.path_number{unit};
+                %spike position overlaying dot position for 1st path recorded
+                this_path = find(path_number == 1);
+                %num_trials = floor(size(spike_times{unit},1)/2);
+                make_spike_jittered_plot(position{unit}((2*this_path(1)-1):this_path(end)*2,:),spike_times{unit}(this_path,:),[2 3],2)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 xlim([100 700])
                 ylim([0 600])
                 axis off
                 axis square
-                title('1st Half')
+                title('1st Path')
                 
-                %spike position overlaying dot position for 2nd half of recording
-                make_spike_jittered_plot(position{unit}(2*num_trials+1:end,:),spike_times{unit}(num_trials+1:end,:),[2 3],5)
+                 %spike position overlaying dot position for 2nd path recorded
+                this_path = find(path_number == 2);
+                make_spike_jittered_plot(position{unit}((2*this_path(1)-1):this_path(end)*2,:),spike_times{unit}(this_path,:),[2 3],5)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 xlim([100 700])
                 ylim([0 600])
                 axis off
-                axis square
-                title('2nd Half')
-                
+                axis square                
                 
                 num_not_nans = sum(~isnan(spike_times{unit}));
                 indeces = find(num_not_nans > 25);

@@ -18,7 +18,7 @@ function ITI_analysis(data_dir,figure_dir,session_data)
 figure_dir = [figure_dir 'ITI analysis\'];
 task = 'ListSQ';
 min_blks = 2;
-twin = 150;% how much time to take prior to ITT start and end
+twin = 200;% how much time to take prior to ITT start and end
 % Delay in HPC to visual stimuli around 150-200 ms so probably want at least 2x this
 trial_start_code = 15; %ITI code
 ITI_dur = 1000;
@@ -51,11 +51,13 @@ if num_units == 0
 end
 num_trials = length(cfg.trl);
 
-valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks);
+%determine which trials units are stable for
+valid_trials = determine_valid_trials(task_file,valid_trials,cfg,num_units,min_blks,task);
 if all(isnan(valid_trials(1,:)))
     disp([task_file(1:8) ': no valid units could be found. Exiting function...'])
     return %since no valid units skip analysis
 end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Align Spikes to ITI---%%%
@@ -70,11 +72,11 @@ disp('Aligning spike times to trial events')
 %preallocate space and parallel structure of cfg
 time_locked_firing = cell(1,num_units);
 previous_trial_type = cell(1,num_units);%what kind of trial happened previous the trial
-current_trial_type = cell(1,num_units);%what kind of trial happened current this trial
+upcomming_trial_type = cell(1,num_units);%what kind of trial happened current this trial
 for unit = 1:num_units
-    time_locked_firing{unit} = NaN(num_trials,ITI_dur+2*twin);
+    time_locked_firing{unit} = NaN(num_trials,ITI_dur+twin);
     previous_trial_type{unit} = zeros(1,num_trials);
-    current_trial_type{unit} = zeros(1,num_trials);
+    upcomming_trial_type{unit} = zeros(1,num_trials);
 end
 %trial type 1: sequence 1
 %trial type 2: sequence 2
@@ -87,7 +89,8 @@ for t = 2:num_trials
 
         %---this trial---%
         this_trial_start = cfg.trl(t).alltim(cfg.trl(t).allval == trial_start_code);
-           %---Last Trial---%
+        
+        %---This Trial---%
         if itmlist(cfg.trl(t).cnd-1000) <= sequence_items(end)%last trial was sequence
             if ~isempty(find(cfg.trl(t).allval == reward_code,1))%%last trial was successful
                 trial_type_current = find(sequence_items == itmlist(cfg.trl(t).cnd-1000)); %store for next trial
@@ -108,9 +111,8 @@ for t = 2:num_trials
             end
         end
         
-        
-        
         %---Last Trial---%
+        last_trial_start = cfg.trl(t-1).alltim(cfg.trl(t-1).allval == trial_start_code);
         if itmlist(cfg.trl(t-1).cnd-1000) <= sequence_items(end)%last trial was sequence
             if ~isempty(find(cfg.trl(t-1).allval == reward_code,1))%%last trial was successful
                 last_trial_end = cfg.trl(t-1).alltim(cfg.trl(t-1).allval == reward_code);
@@ -135,28 +137,33 @@ for t = 2:num_trials
                 trial_type_previous = -4;%store for next trial
             end
         end
-        last_trial_start = cfg.trl(t-1).alltim(cfg.trl(t-1).allval == trial_start_code);
-        time_left = this_trial_start-last_trial_end+1; %how much time between last event in previous trial and of trial
-        if time_left > 1000 %may happen if task got paused because monkey wasnt working
-            if trial_type_previous < 0 %not sucessful so don't care too much anyway
-                time_left = 0;
-            else
-                continue %not sure what happened so skipping
-            end
-        end
-        last_trial_end = last_trial_end-last_trial_start; %zero last trial end to beinign of it's trial start
-        
+
+        event_start = last_trial_end-last_trial_start; %so same time axis as spikes
         for unit = 1:num_units
-            if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) && t-1 >= valid_trials(1,unit)%only put data in for valid trials
-               
-                current_time = ITI_dur+twin-time_left;%take into account last trial
-                current_spikes = data(unit).values{t}(1:current_time);
-                past_spikes = data(unit).values{t-1}(end-time_left-twin+1:end);
+            if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only put data in for valid trials
                 
-                time_locked_firing{unit}(t,:) = [past_spikes current_spikes];
+                %spikes from last trial
+                spikes = find(data(unit).values{t-1} == 1);
+                event_spikes = spikes(spikes > event_start-twin & ...
+                    spikes <= event_start+ITI_dur)-event_start+twin;
                 
+                %get spikes from this trial
+                temp = zeros(1,ITI_dur+twin);
+                if this_trial_start-(last_trial_end+ITI_dur) < 0 %trial "ends" before window
+                    leftover = (last_trial_end+ITI_dur)-this_trial_start;
+                    if t ~= num_trials
+                        spks = find(data(unit).values{t}(1:leftover) == 1)+...
+                            (this_trial_start-last_trial_end)+twin;
+                        event_spikes = [event_spikes spks];
+                    else
+                        temp(end-leftover+1:end) = NaN;
+                    end
+                end
+                temp(event_spikes) = 1;
+                
+                time_locked_firing{unit}(t,:) = temp;
                 previous_trial_type{unit}(t) = trial_type_previous;
-                current_trial_type{unit}(t) = trial_type_current;
+                upcomming_trial_type{unit}(t) = trial_type_current;
             end
         end
     end
@@ -172,12 +179,12 @@ Fs = data(1).fsample; %should be 1000
 info_type = 'temporal';
 % perform mutual information theory analysis to determine
 % if neurons encode info about a particular time within the ITI
-temporal_info.rate = NaN(1,num_units);
-temporal_info.shuffled_rate = cell(1,num_units);
-temporal_info.rate_prctile =  NaN(1,num_units);
-temporal_info.temporalstability = NaN(2,num_units);
-temporal_info.shuffled_temporalstability = cell(1,num_units);
-temporal_info.temporalstability_prctile =  NaN(2,num_units);
+ITI_temporal_info.rate = NaN(1,num_units);
+ITI_temporal_info.shuffled_rate = cell(1,num_units);
+ITI_temporal_info.rate_prctile =  NaN(1,num_units);
+ITI_temporal_info.temporalstability = NaN(2,num_units);
+ITI_temporal_info.shuffled_temporalstability = cell(1,num_units);
+ITI_temporal_info.temporalstability_prctile =  NaN(2,num_units);
 for unit = 1:num_units
     if  nansum(nansum(time_locked_firing{unit})) > 0
         
@@ -185,72 +192,26 @@ for unit = 1:num_units
            [observed_info_rate,shuffled_info_rate]...
             = estimated_mutual_information(time_locked_firing{unit}(previous_trial_type{unit} > 0,:),numshuffs,info_type,smval,Fs);
         
-        temporal_info.rate(unit) = observed_info_rate.skaggs;
-        temporal_info.shuffled_rate{unit} = shuffled_info_rate.skaggs;
-        temporal_info.rate_prctile(unit) = 100*sum(temporal_info.rate(unit)...
-            > temporal_info.shuffled_rate{unit})/numshuffs;
-        temporal_info.temporalstability(:,unit) = observed_info_rate.temporalstability;
-        temporal_info.shuffled_temporalstability{unit} = shuffled_info_rate.temporalstability;
-        temporal_info.temporalstability_prctile(1,unit) = 100*sum(...
+        ITI_temporal_info.rate(unit) = observed_info_rate.skaggs;
+        ITI_temporal_info.shuffled_rate{unit} = shuffled_info_rate.skaggs;
+        ITI_temporal_info.rate_prctile(unit) = 100*sum(ITI_temporal_info.rate(unit)...
+            > ITI_temporal_info.shuffled_rate{unit})/numshuffs;
+        ITI_temporal_info.temporalstability(:,unit) = observed_info_rate.temporalstability;
+        ITI_temporal_info.shuffled_temporalstability{unit} = shuffled_info_rate.temporalstability;
+        ITI_temporal_info.temporalstability_prctile(1,unit) = 100*sum(...
             observed_info_rate.temporalstability(1) > ...
             shuffled_info_rate.temporalstability(1,:))/numshuffs;
-        temporal_info.temporalstability_prctile(2,unit) = 100*sum(...
+        ITI_temporal_info.temporalstability_prctile(2,unit) = 100*sum(...
             observed_info_rate.temporalstability(2) > ...
             shuffled_info_rate.temporalstability(2,:))/numshuffs;
     end
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%---ANOVA anlysis to Determine if Firing Rate is Modulated by TrialType---%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% num_steps = (ITI_dur+2*twin)/ANOVA_step-ANOVA_window/ANOVA_step+1;%
-%
-% pvals_previous = NaN(num_units,num_steps);
-% pvals_current = NaN(num_units,num_steps);
-% for unit = 1:num_units
-%     for step =  1:num_steps
-%         time_window = (step-1)*ANOVA_step+1:((step-1)*ANOVA_step+ANOVA_window);%time window to grab data
-%
-%         %get spikes/trial for each of the conditions varied over previous
-%         %trial type
-%         temp_firing1 = sum(time_locked_firing{unit}(previous_trial_type{unit} == 1,time_window),2);
-%         temp_firing2 = sum(time_locked_firing{unit}(previous_trial_type{unit} == 2,time_window),2);
-%         temp_firing3 = sum(time_locked_firing{unit}(previous_trial_type{unit} == 3,time_window),2);
-%         temp_firing4 = sum(time_locked_firing{unit}(previous_trial_type{unit} == 4,time_window),2);
-%
-%         pvals_previous(unit,step) =anova1([temp_firing1;temp_firing2;temp_firing3;temp_firing4],...
-%             [ones(length(temp_firing1),1);2*ones(length(temp_firing2),1);...
-%             3*ones(length(temp_firing3),1);4*ones(length(temp_firing4),1)],'off');
-%
-%         %get spikes/trial for each of the conditon varied over current
-%         %trial type
-%         temp_firing1 = sum(time_locked_firing{unit}(current_trial_type{unit} == 1,time_window),2);
-%         temp_firing2 = sum(time_locked_firing{unit}(current_trial_type{unit} == 2,time_window),2);
-%         temp_firing3 = sum(time_locked_firing{unit}(current_trial_type{unit} == 3,time_window),2);
-%         temp_firing4 = sum(time_locked_firing{unit}(current_trial_type{unit} == 4,time_window),2);
-%
-%          pvals_current(unit,step) =anova1([temp_firing1;temp_firing2;temp_firing3;temp_firing4],...
-%             [ones(length(temp_firing1),1);2*ones(length(temp_firing2),1);...
-%             3*ones(length(temp_firing3),1);4*ones(length(temp_firing4),1)],'off');
-%    end
-% end
-%
-% ANOVA_stats.pvals_previous = pvals_previous;
-% ANOVA_stats.pvals_current = pvals_current;
-
-%use a simple bonferroni correction
-% significant_times_previous = zeros(num_steps,num_units);
-% significant_times_previous(pvals_previous < 0.05/num_steps) = 1;
-% significant_times_current =zeros(num_steps,num_units);
-% significant_times_current(pvals_current < 0.05/num_steps) = 1;
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Plot and Save Figures of Results---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-t = -twin+1:ITI_dur+twin;
+t = -twin+1:ITI_dur;
 unit_names = unit_stats(1,:);
 for unit = 1:num_units
     if nansum(nansum(time_locked_firing{unit})) > 0
@@ -265,12 +226,12 @@ for unit = 1:num_units
         xlabel('Time from  ITI start (ms)')
         ylabel('Firing Rate (Hz)')
         title_str = ['n = ' num2str(size(time_locked_firing{unit},1))];
-        if temporal_info.rate_prctile(unit) > 95 || temporal_info.temporalstability_prctile(unit) > 95
-            title_str = [title_str ', bit = ' num2str(temporal_info.rate_prctile(unit),3) ...
-                '%, \rho_{1/2} = ' num2str(temporal_info.temporalstability(1,unit),2) ...
-                ' ' num2str( temporal_info.temporalstability_prctile(1,unit),3) '%'];
+        if ITI_temporal_info.rate_prctile(unit) > 95 || ITI_temporal_info.temporalstability_prctile(unit) > 95
+            title_str = [title_str ', bit = ' num2str(ITI_temporal_info.rate_prctile(unit),3) ...
+                '%, \rho_{1/2} = ' num2str(ITI_temporal_info.temporalstability(1,unit),2) ...
+                ' ' num2str( ITI_temporal_info.temporalstability_prctile(1,unit),3) '%'];
         end
-        xlim([-twin twin+ITI_dur])
+        xlim([-twin ITI_dur])
         title(title_str)
         ylims(1,:) = ylim;
         
@@ -279,11 +240,12 @@ for unit = 1:num_units
         [trial,time] = find(time_locked_firing{unit}(previous_trial_type{unit} > 0,:) == 1);
         if ~isempty(trial)
             plot(time-twin,trial,'.k')
-            xlim([-twin ITI_dur+twin])
+            xlim([-twin ITI_dur])
             ylim([0 max(trial)+1]);
         end
         ylabel('Trial #')
         xlabel('Time from ITI start (ms)')
+        box off
         
         
         %previous trial incluence of ITI firing rate
@@ -298,26 +260,24 @@ for unit = 1:num_units
         xlim([-twin twin+ITI_dur])
         xlabel('Time from  ITI start (ms)')
         ylabel('Firing Rate (Hz)')
-        xlim([-twin twin+ITI_dur])
-        
-        title_str =['Divided By Previous Trial Type'];
-        title(sprintf(title_str))
+        xlim([-twin ITI_dur])
+        title('Divided By Previous Trial Type')
         
         ylims(2,:) = ylim;
         
         %current trial incluence of ITI firing rate
         subplot(2,2,4)
         hold on
-        dofill(t,time_locked_firing{unit}(current_trial_type{unit} == 1,:),'r',1,smval);
-        dofill(t,time_locked_firing{unit}(current_trial_type{unit} == 2,:),'g',1,smval);
-        dofill(t,time_locked_firing{unit}(current_trial_type{unit} == 3,:),'b',1,smval);
-        dofill(t,time_locked_firing{unit}(current_trial_type{unit} == 4,:),'m',1,smval);
+        dofill(t,time_locked_firing{unit}(upcomming_trial_type{unit} == 1,:),'r',1,smval);
+        dofill(t,time_locked_firing{unit}(upcomming_trial_type{unit} == 2,:),'g',1,smval);
+        dofill(t,time_locked_firing{unit}(upcomming_trial_type{unit} == 3,:),'b',1,smval);
+        dofill(t,time_locked_firing{unit}(upcomming_trial_type{unit} == 4,:),'m',1,smval);
         dofill(t,time_locked_firing{unit},'k',1,smval);
         hold off
-        xlim([-twin twin+ITI_dur])
+        xlim([-twin ITI_dur])
         xlabel('Time from  ITI start (ms)')
         ylabel('Firing Rate (Hz)')
-        title('Divided By Current Trial Type')
+        title('Divided By Upcomming Trial Type')
         legend({'Sequence 1','Sequence 2','Novel Images','Repeat Images','All'},...
             'Location','NorthEast')
         
@@ -330,60 +290,26 @@ for unit = 1:num_units
         
         for sb = [1 2 4]
             subplot(2,2,sb)
+            hold on
+            plot([0 0],[ymin ymax],'k--')
+            hold off
             ylim([ymin ymax])
         end
         
-        %     %---shade in times in which firing rate significantly varies by trial type---%
-        %     %by prvious trial type
-        %     subplot(1,2,1)
-        %     ylim([ymin ymax])
-        %     hold on
-        %     %not efficient will want to rewrite and may depend on multiple
-        %     %comparisons corrections method
-        %     for step = 1:num_steps
-        %         if significant_times_previous(step,unit) == 1
-        %             time_window = [(step-1)*ANOVA_step+1 ((step-1)*ANOVA_step+ANOVA_window)]-twin;%time window to grab data
-        %             h = fill([time_window(1) time_window(2) time_window(2) time_window(1) time_window(1)],...
-        %                 [ymin ymin ymax ymax 0],'k');
-        %             uistack(h,'bottom')
-        %             set(h,'facealpha',.25,'EdgeColor','None')
-        %         end
-        %     end
-        %     hold off
-        
-        %     subplot(1,2,2)
-        %     ylim([ymin ymax])
-        %     hold on
-        %     %not efficient will want to rewrite and may depend on multiple
-        %     %comparisons corrections method
-        %     for step = 1:num_steps
-        %         if significant_times_current(step,unit) == 1
-        %             time_window = [(step-1)*ANOVA_step+1 ((step-1)*ANOVA_step+ANOVA_window)]-twin;%time window to grab data
-        %             h = fill([time_window(1) time_window(2) time_window(2) time_window(1) time_window(1)],...
-        %                 [ymin ymin ymax ymax 0],'k');
-        %             uistack(h,'bottom')
-        %             set(h,'facealpha',.25,'EdgeColor','None')
-        %         end
-        %     end
-        %     hold off
-        %     %%
-        
         if multiunit(unit)
-            subtitle(['MultiUnit' unit_names{unit}]);
+            subtitle(['MultiUnit' task_file(1:8) ' ' unit_names{unit}]);
         else
-            subtitle(unit_names{unit});
+            subtitle([ task_file(1:8) ' ' unit_names{unit}]);
         end
-        
         save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names{unit} '_ITI_analysis']);
     end
 end
 
-ANOVA_stats = [];
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Finally save all the data---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 save([data_dir task_file(1:8) '-ListSQ-ITI_results.mat'],'time_locked_firing',...
-    'previous_trial_type','current_trial_type','smval','temporal_info',...
-    'unit_names','ANOVA_stats','twin','ITI_dur');
+    'previous_trial_type','upcomming_trial_type','smval','ITI_temporal_info',...
+    'unit_names','twin','ITI_dur');
 disp(['ITI Locked Data Analyis for ' task_file(1:8) ' saved']);
 end

@@ -12,7 +12,7 @@ twin1 = 200;% how much time to take before event cross appears and how much to i
 twin2 = 1000;%how much time to look at after stimulus onset for short window
 twin3 = 500;%minimum fixation on image cross hair duraiton
 twin4 = 5000; %for long window on image on
-numshuffs = 100; %number of shuffles to do for bootstrapping
+numshuffs = 10000; %number of shuffles to do for bootstrapping
 smval =60; %30 ms std, 1/2 width of gaussian smoothing filter
 smval2 = 300;%150 ms std, 1/2 width of gaussian smoothing filter
 
@@ -478,7 +478,7 @@ for unit = 1:num_units
             end
             hold off
         end
-              
+        
         n_str = [' Image Onset, n_ =' num2str(size(time_lock_firing{unit,1},1))];
         if multiunit(unit)
             subtitle(['Multiunit ' unit_names{unit} n_str]);

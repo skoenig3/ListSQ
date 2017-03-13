@@ -32,6 +32,7 @@ if isempty(task_file)
 end
 load([data_dir task_file(1:end-11) '-preprocessed.mat'],'data','cfg','valid_trials',...
     'hdr','whole_session_mean_firing_rate','excitatory_inhibitory');
+
 %grab unit data
 [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
     multiunit,unit_confidence,sorting_quality);
@@ -68,8 +69,19 @@ switch task
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         info_type = 'spatial_cvtnew';%type of mutual information analysis to perform
-     
+        
         load([data_dir task_file(1:end-11) '-preprocessed.mat'],'meta');
+        
+        %slight bug in the timing file that reporst the wrong condition
+        %number for a few trials on a few sessions which was later fixed,
+        %removes 1 trial/block or path
+        if strcmpi(task_file(1:2),'PW)')
+            file_date = str2double(task_file(3:6));
+            if file_data >= 141007 && file_data <= 141024
+                [meta,cfg] = CVTNEW_remove_bad_condition(meta,cfg);
+            end
+        end
+        
         disp('Collecting Spike Locations')
         
         Fs = data(1).fsample; %should be 1000
@@ -80,24 +92,45 @@ switch task
         reward_code = 3;
         imageX = 800;%528; %horizontal size of displayed dot positions
         imageY = 600;%528 %horizontal size of displayed dot positions
+        early_response_code = 205;
+        late_response_code = 202;
+        break_fixation_code = 203;
+        stimulus_off_code = 24;
         
         %preallocate space and parallel structure of cfg
         dotpos = cell(1,num_units);
         spike_times = cell(1,num_units);
+        dotdirection = cell(1,num_units);
         for unit = 1:num_units
             spike_times{unit} = NaN(length(cfg.trl),3000);
             dotpos{unit} = NaN(2*length(cfg.trl),3000);
+            dotdirection{unit} =  NaN(length(cfg.trl),3000);
         end
         
         for t = 1:length(cfg.trl);
-            if any(cfg.trl(t).allval == reward_code); %only take correct trials
+            if any(cfg.trl(t).allval == dot_on_code);% any(cfg.trl(t).allval == reward_code); %only take correct trials
                 trial_start = cfg.trl(t).alltim(cfg.trl(t).allval == ITIstart_code);
                 pathon =  cfg.trl(t).alltim(cfg.trl(t).allval == dot_on_code)-trial_start; %meta data starts at 1st 666 which appears before dot actually turns on in event array
                 dot_clrchng = cfg.trl(t).alltim(cfg.trl(t).allval == dot_clrchng_code)-trial_start;
                 responded = cfg.trl(t).alltim(cfg.trl(t).allval == bar_code_response)-trial_start;
+                if isempty(responded)%error trial
+                    responded = cfg.trl(t).alltim(cfg.trl(t).allval == early_response_code)-trial_start; %look for early response
+                    if isempty(responded)
+                        responded = cfg.trl(t).alltim(cfg.trl(t).allval == late_response_code)-trial_start; %look for early response
+                        if isempty(responded)
+                           responded = cfg.trl(t).alltim(cfg.trl(t).allval == break_fixation_code)-trial_start; %look for early response
+                           if isempty(responded)
+                                responded = cfg.trl(t).alltim(cfg.trl(t).allval == stimulus_off_code)-trial_start; %look for early response
+                                responded = responded(1);
+                           end
+                        end
+                    end
+                end
                 
-                xn = round(interp1(meta(t).sample,meta(t).x,meta(t).sample(1):meta(t).sample(end),'cubic'));
-                yn = round(interp1(meta(t).sample,meta(t).y,meta(t).sample(1):meta(t).sample(end),'cubic'));
+                xn = interp1(meta(t).sample,meta(t).x,meta(t).sample(1):meta(t).sample(end),'cubic');
+                yn = interp1(meta(t).sample,meta(t).y,meta(t).sample(1):meta(t).sample(end),'cubic');
+                direction =  atan2(diff(yn),diff(xn));
+                direction = [direction direction(end)]; %correlated in time and want to make equal size to spike train
                 
                 for unit = 1:num_units
                     if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only put data in for valid trials
@@ -108,8 +141,9 @@ switch task
                         temp(spikeind) = 1;
                         spike_times{unit}(t,1:length(temp)) = temp;
                         
-                        dotpos{unit}(2*t-1,1:length(xn)) = xn;
-                        dotpos{unit}(2*t,  1:length(xn)) = yn;
+                        dotpos{unit}(2*t-1,1:length(xn)) = round(xn);
+                        dotpos{unit}(2*t,  1:length(xn)) = round(yn);
+                        dotdirection{unit}(t,1:length(xn)) = direction;
                     end
                 end
             end
@@ -119,12 +153,11 @@ switch task
         dotpos = laundry(dotpos);
         spike_times = laundry(spike_times);
         
-        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Spatial analysis and signifance testing---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         disp('Determining if neurons are spatially modulated')
-
+        
         %---Determine if Neuron is more spatial than chance---%
         spatial_info.rate = NaN(1,num_units); %the observed information rate in bits/sec
         spatial_info.shuffled_info_rate = cell(1,num_units); %bootstrapped information rate in bits/sec expected by chance from spike train
@@ -142,51 +175,69 @@ switch task
         
         trial_data{3} = [imageX imageY];
         for unit = 1:num_units
-            
-            trial_data{1} = dotpos{unit};
-            trial_data{2} = spike_times{unit};
-            
-            [observed_info_rate,shuffled_info_rate]...
-                = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
-            
-            %skaggs information score
-            spatial_info.rate(unit) = observed_info_rate.skaggs;
-            spatial_info.shuffled_info_rate{unit} = shuffled_info_rate.skaggs;
-            spatial_info.shuffled_rate_prctile(unit) = 100*sum(...
-                spatial_info.rate(unit) > spatial_info.shuffled_info_rate{unit})/numshuffs;
-            
-            %spatial correlation first half vs second half
-            spatial_info.spatialstability_halves(unit) = observed_info_rate.spatialstability_halves;
-            spatial_info.shuffled_spatialstability_halves{unit} = shuffled_info_rate.spatialstability_halves;
-            spatial_info.spatialstability_halves_prctile(unit) = ...
-                100*sum(spatial_info.spatialstability_halves(unit) > ...
-                spatial_info.shuffled_spatialstability_halves{unit})/numshuffs;
-            
-            
-            %spatial correlation for even and odd trials
-            spatial_info.spatialstability_even_odd(unit) = observed_info_rate.spatialstability_even_odd;
-            spatial_info.shuffled_spatialstability_even_odd{unit} =...
-                shuffled_info_rate.spatialstability_even_odd;
-            spatial_info.spatialstability_even_odd_prctile(unit) = ...
-                100*sum(spatial_info.spatialstability_even_odd(unit) > ...
-                spatial_info.shuffled_spatialstability_even_odd{unit})/numshuffs;
+            if ~isempty(dotpos{unit})
+                trial_data{1} = dotpos{unit};
+                trial_data{2} = spike_times{unit};
+                
+                [observed_info_rate,shuffled_info_rate]...
+                    = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
+                
+                %skaggs information score
+                spatial_info.rate(unit) = observed_info_rate.skaggs;
+                spatial_info.shuffled_info_rate{unit} = shuffled_info_rate.skaggs;
+                spatial_info.shuffled_rate_prctile(unit) = 100*sum(...
+                    spatial_info.rate(unit) > spatial_info.shuffled_info_rate{unit})/numshuffs;
+                
+                %spatial correlation first half vs second half
+                spatial_info.spatialstability_halves(unit) = observed_info_rate.spatialstability_halves;
+                spatial_info.shuffled_spatialstability_halves{unit} = shuffled_info_rate.spatialstability_halves;
+                spatial_info.spatialstability_halves_prctile(unit) = ...
+                    100*sum(spatial_info.spatialstability_halves(unit) > ...
+                    spatial_info.shuffled_spatialstability_halves{unit})/numshuffs;
+                
+                %spatial correlation for even and odd trials
+                spatial_info.spatialstability_even_odd(unit) = observed_info_rate.spatialstability_even_odd;
+                spatial_info.shuffled_spatialstability_even_odd{unit} =...
+                    shuffled_info_rate.spatialstability_even_odd;
+                spatial_info.spatialstability_even_odd_prctile(unit) = ...
+                    100*sum(spatial_info.spatialstability_even_odd(unit) > ...
+                    spatial_info.shuffled_spatialstability_even_odd{unit})/numshuffs;
+            end
         end
         
-     
+        path_numbers = cell(1,length(num_units));
+        for unit = 1:num_units
+            all_cnds = NaN(1,length(cfg.trl));
+            for t = 1:length(cfg.trl);
+                if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only put data in for valid trials
+                    all_cnds(t) = cfg.trl(t).cnd-1000;
+                end
+            end
+            all_cnds(isnan(all_cnds)) = [];
+            unique_cnds = unique(all_cnds,'stable');
+            paths = NaN(1,length(cfg.trl));
+            for c = 1:length(unique_cnds)
+                paths(all_cnds == unique_cnds(c)) = c;
+            end
+            path_numbers{unit} = paths; 
+        end
+        
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Plot and Save Figures of Results---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         task_type = 'cvtnew_spatial';
         unit_names.multiunit = multiunit;
-        unit_names.name = cfg.channel;
+        unit_names.name = unit_stats(1,:);
+        unit_names.path_number = path_numbers;
         spatial_analysis_plotsV2(figure_dir,task_file,dotpos,spike_times,spatial_info,task_type,...
             unit_names,[binsize,filter_width],imageX,imageY,NaN,Fs);
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Finally save all the data---%%%
         save([data_dir task_file(1:10) '-spatial_analysis_results.mat'],...
-            'spike_times','dotpos','spatial_info','binsize','filter_width')
+            'spike_times','dotpos','spatial_info','binsize','filter_width',...
+            'dotdirection','unit_names')
         disp(['Spatial Data Analyis for ' task_file(1:10) ' saved']);
         
     case 'ListSQ'
@@ -197,7 +248,7 @@ switch task
         %strong visual response (though some may last longer) combined with strong central bias
         
         info_type = 'spatial';%type of mutual information analysis to perform
- 
+        
         disp('Collecting Spike Locations')
         
         %set/get some general important info
@@ -241,7 +292,7 @@ switch task
                 imgoff = cfg.trl(t).alltim(cfg.trl(t).allval == img_off_code)-trial_start;
                 
                 % if monkey isn't paying attention and looked away image presentation
-                % is now longer than imgdur (because of cumulative looking time) 
+                % is now longer than imgdur (because of cumulative looking time)
                 % so data isn't probably worth much plus have to cut off somewhere
                 if imgoff-imgon > 1.5*imgdur-1 %cut off trial at 1.5x length of desired looking time
                     imgoff = imgon+1.5*imgdur-1;
@@ -256,12 +307,12 @@ switch task
                 if any(isnan(which_img(img_index)))%presentation error so skip trial, see get_image_numbers.m
                     continue
                 end
-
+                
                 for unit = 1:num_units
                     if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only valid trials for this unit
                         eyepos{unit}(2*t-1,1:length(xn)) = xn; %horizontal eye data
                         eyepos{unit}(2*t,1:length(yn)) = yn; %vertical eye data
-                       
+                        
                         which_images{unit}(t) = which_img(img_index);
                         nvr{unit}(t) = novel_vs_repeat(img_index);
                         
@@ -354,7 +405,7 @@ switch task
                 spatial_info.spatialstability_halves_prctile(unit) = ...
                     100*sum(spatial_info.spatialstability_halves(unit) > ...
                     spatial_info.shuffled_spatialstability_halves{unit})/numshuffs;
-            
+                
                 
                 %spatial correlation for even and odd trials
                 spatial_info.spatialstability_even_odd(unit) = observed_info_rate.spatialstability_even_odd;

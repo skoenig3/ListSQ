@@ -9,11 +9,33 @@ ITIstart_code = 15; %start of ITI
 img_on_code= 23; %start of image presentation
 img_off_code = 24; %end of image presentation
 
+fltord = 60;
+lowpasfrq = 30;
+nyqfrq = 1000 ./ 2;
+flt = fir2(fltord,[0,lowpasfrq./nyqfrq,lowpasfrq./nyqfrq,1],[1,1,0,0]); %30 Hz low pass filter
+buffer = 100;
+
+fltord = 60;
+lowpasfrq = 100;
+nyqfrq = 1000 ./ 2;
+flt2 = fir2(fltord,[0,lowpasfrq./nyqfrq,lowpasfrq./nyqfrq,1],[1,1,0,0]); %100 Hz low pass filter
+
 set = 0;%set index #
 fixation_durations = cell(2,85);
 saccade_amplitudes = cell(2,85);
 saccade_durations = cell(2,85);
+vel_profile = []; %algined to saccade start
+smoothed_vel_profile = []; %smoothed algined to saccade start
+smoothed_vel_profile2 = []; %smoothed more algined to saccade start
+fixation_vel_profile = []; %algined to fixation start
+fixation_smoothed_vel_profile = []; %smoothed algined to fixation start
+fixation_smoothed_vel_profile2 = [];%smoothed more algined to fixation start
+twin = 100;
+which_monkey =[];
+trial_count = [];
 
+RMS_noise = cell(2,85); %variability in fixation position as a liberal estimate of eye tracking noise
+%row 1 is x, row 2 is y
 for monkey = 1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
@@ -27,7 +49,7 @@ for monkey = 1:2
         listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
-        predict_rt = 206;%206 ms prediction 5-percentile
+        predict_rt = 156;%156 ms prediction 5-percentile
         chamber_zero = [13.5 -11]; %AP ML[
         
     elseif monkey ==2%strcmpi(monkey,'Tobii')
@@ -75,11 +97,26 @@ for monkey = 1:2
         saccade_amplitudes{2,set} = NaN(96,40);
         saccade_durations{1,set} = NaN(96,40);
         saccade_durations{2,set} = NaN(96,40);
+        RMS_noise{1,set} = NaN(192,40);%x 
+        RMS_noise{2,set} = NaN(192,40);%y
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %---Get Behavioral Stats---%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%
         num_trials = length(cfg.trl); %number of trials
+        
+        %velocity aligned to saccade
+        v_profile = NaN(4000,twin*2);
+        sv_profile = NaN(4000,twin*2);    
+        sv_profile2 = NaN(4000,twin*2);
+        
+        %velocity aligned to fixation
+        fv_profile = NaN(4000,twin*2);
+        fsv_profile = NaN(4000,twin*2);
+        fsv_profile2 = NaN(4000,twin*2);
+
+
+        vind = 1;
         for t = 1:num_trials
             if any(cfg.trl(t).allval == img_on_code) && itmlist(cfg.trl(t).cnd-1000) > sequence_items(end) %only want image trials
                 
@@ -109,6 +146,66 @@ for monkey = 1:2
                 saccadetimes = fixationstats{t}.saccadetimes; %saccade start and end times
                 xy = fixationstats{t}.XY;
                 
+                % parse the input to remove the breaks in the eye data caused by looking
+                % outside as indicated by the presence of NaNs
+                vel = [];
+                svel = [];
+                svel2 = [];
+
+                parsed_eyedat = preparse(xy);
+                
+                for p = 1:length(parsed_eyedat)
+                    if any(~isnan(parsed_eyedat{p}(1,:)))
+                        
+                        %raw velocity
+                        x = parsed_eyedat{p}(1,:);
+                        y = parsed_eyedat{p}(2,:);
+                        velx = diff(x);
+                        vely = diff(x);
+                        v = sqrt(velx.^2+vely.^2);
+                        v(end+1) = v(end);
+                        vel = [vel v];
+                        
+                        %low pass filtered velocity 30 Hz cutoff
+                        x = [x(buffer:-1:1) x x(end:-1:end-buffer)]; %add buffer for filtering
+                        y = [y(buffer:-1:1) y y(end:-1:end-buffer)];   %add buffer for filtering
+                        xss = filtfilt(flt,1,x);
+                        yss = filtfilt(flt,1,y);
+                        xss = xss(101:end-101); %remove buffer after filtering
+                        yss = yss(101:end-101); %remove buffer after filtering
+                        x = x(101:end-101); %remove buffer after filtering
+                        y = y(101:end-101); %remove buffer after filtering
+                        
+                        svelx = diff(xss);
+                        svely = diff(yss);
+                        sv = sqrt(svelx.^2+svely.^2);
+                        sv(end+1) = sv(end);
+                        svel = [svel sv];
+                        
+                        %low pass filtered velocity 100 Hz cutoff
+                        x = [x(buffer:-1:1) x x(end:-1:end-buffer)]; %add buffer for filtering
+                        y = [y(buffer:-1:1) y y(end:-1:end-buffer)];   %add buffer for filtering
+                        xss = filtfilt(flt2,1,x);
+                        yss = filtfilt(flt2,1,y);
+                        xss = xss(101:end-101); %remove buffer after filtering
+                        yss = yss(101:end-101); %remove buffer after filtering
+                        x = x(101:end-101); %remove buffer after filtering
+                        y = y(101:end-101); %remove buffer after filtering
+                        
+                        svelx = diff(xss);
+                        svely = diff(yss);
+                        sv2 = sqrt(svelx.^2+svely.^2);
+                        sv2(end+1) = sv2(end);
+
+                        svel2 = [svel2 sv2];
+                        
+                    else
+                        vel = [vel NaN(1,size(parsed_eyedat{p},2))];
+                        svel = [svel NaN(1,size(parsed_eyedat{p},2))];
+                        svel2 = [svel2 NaN(1,size(parsed_eyedat{p},2))];
+                    end
+                end
+                
                 %remove fixations that started before image turned on
                 invalid= find(fixationtimes(1,:) < imgon);
                 fixationtimes(:,invalid) = [];
@@ -130,6 +227,10 @@ for monkey = 1:2
                 saccade_durations{nvr,set}(which_image,1:size(saccadetimes,2)) = sacdurs;
                 
                 for f = 1:size(fixationtimes,2)%ignore first fixation not sure where it was/possibly contaminated anyway
+                    
+                     RMS_noise{1,set}(img_index,f) = std(xy(1,fixationtimes(1,f):fixationtimes(2,f)))/24; %std/rms in dva
+                     RMS_noise{2,set}(img_index,f) = std(xy(2,fixationtimes(1,f):fixationtimes(2,f)))/24; %std/rms in dva
+
                     if f == 1
                         sacamp = sqrt(sum((fixations(:,1)-[400;300]).^2));
                         saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
@@ -140,17 +241,38 @@ for monkey = 1:2
                         end
                         sacamp = sqrt(sum((xy(:,saccadetimes(2,prior_sac))-xy(:,saccadetimes(1,prior_sac))).^2)); %saccade amplitude
                         saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
+                        
+                        
+                        v_profile(vind,:) = vel(saccadetimes(1,prior_sac)-twin:saccadetimes(1,prior_sac)+twin-1);
+                        sv_profile(vind,:) =svel(saccadetimes(1,prior_sac)-twin:saccadetimes(1,prior_sac)+twin-1);
+                        sv_profile2(vind,:) =svel2(saccadetimes(1,prior_sac)-twin:saccadetimes(1,prior_sac)+twin-1);
+                        
+                        fv_profile(vind,:) = vel(fixationtimes(1,f)-twin:fixationtimes(1,f)+twin-1);
+                        fsv_profile(vind,:) =svel(fixationtimes(1,f)-twin:fixationtimes(1,f)+twin-1);
+                        fsv_profile2(vind,:) =svel2(fixationtimes(1,f)-twin:fixationtimes(1,f)+twin-1);
+                        vind = vind+1;
                     end
                 end
             end
         end
+        which_monkey(set) = monkey;
+        trial_count(set) = num_trials;
+        
+        vel_profile = [vel_profile; nanmean(v_profile) ];
+        smoothed_vel_profile = [smoothed_vel_profile; nanmean(sv_profile)];
+        smoothed_vel_profile2 = [smoothed_vel_profile2; nanmean(sv_profile2)];
+        
+
+        fixation_vel_profile = [fixation_vel_profile; nanmean(fv_profile) ];
+        fixation_smoothed_vel_profile = [fixation_smoothed_vel_profile; nanmean(fsv_profile)];
+        fixation_smoothed_vel_profile2 = [fixation_smoothed_vel_profile2; nanmean(fsv_profile2)];
     end
 end
 
 %remove excess empty matrices
-saccade_durations (:,set:end) = [];
-fixation_durations(:,set:end) = [];
-saccade_amplitudes(:,set:end) = [];
+saccade_durations (:,set+1:end) = [];
+fixation_durations(:,set+1:end) = [];
+saccade_amplitudes(:,set+1:end) = [];
 %% Fixuation Durations by Ordinal Fixation #
 all_fix_durs = []; %all fixaiton durations
 nov_fix_durs = NaN(size(fixation_durations,2),20); %median by set novel fixation durations
@@ -160,9 +282,9 @@ for set = 1:size(fixation_durations,2);
     rep_durs = fixation_durations{2,set}; %repeat images
     
     %remove fixations shorter than 100 msin duration since removed from analysis
-    nov_durs(nov_durs < 100) = NaN; 
+    nov_durs(nov_durs < 100) = NaN;
     rep_durs(rep_durs < 100) = NaN;
-        
+    
     nov_fix_durs(set,:) = nanmedian(nov_durs(:,1:20)); %novel
     rep_fix_durs(set,:) = nanmedian(rep_durs(:,1:20)); %repeat
     
@@ -185,9 +307,9 @@ errorb(1:20,nanmean(nov_fix_durs),nanstd(nov_fix_durs)./sqrt(sum(~isnan(nov_fix_
 plot(nanmean(rep_fix_durs),'r')
 errorb(1:20,nanmean(rep_fix_durs),nanstd(rep_fix_durs)./sqrt(sum(~isnan(rep_fix_durs))),'color','r')
 for f = 1:size(nov_fix_durs,2)
-   if p_vals(f) < 0.05/size(nov_fix_durs,2) %Bonferroni correction
-      plot(f,215,'k*')
-   end
+    if p_vals(f) < 0.05/size(nov_fix_durs,2) %Bonferroni correction
+        plot(f,215,'k*')
+    end
 end
 hold off
 xlabel('Ordinal Fixation #')
@@ -241,10 +363,10 @@ for set = 1:size(saccade_amplitudes,2);
     nov_sac = saccade_amplitudes{1,set}/24; %novel  images and convert from pixel to dva
     rep_sac = saccade_amplitudes{2,set}/24; %repeat images and convert from pixel to dva
     
-    %remove saccades smaller than 2 dva 
-    nov_sac(nov_durs < 2) = NaN; 
+    %remove saccades smaller than 2 dva
+    nov_sac(nov_durs < 2) = NaN;
     rep_sac(rep_durs < 2) = NaN;
-        
+    
     nov_sac_amps(set,:) = nanmedian(nov_sac(:,1:20)); %novel
     rep_sac_amps(set,:) = nanmedian(rep_sac(:,1:20)); %repeat
 end
@@ -266,9 +388,9 @@ errorb(1:20,nanmean(nov_sac_amps),nanstd(nov_sac_amps)./sqrt(sum(~isnan(nov_sac_
 plot(nanmean(rep_sac_amps),'r')
 errorb(1:20,nanmean(rep_sac_amps),nanstd(rep_sac_amps)./sqrt(sum(~isnan(rep_sac_amps))),'color','r')
 for f = 1:size(nov_sac_amps,2)
-   if p_vals(f) < 0.05/size(nov_sac_amps,2) %Bonferroni correction
-      plot(f,8.5,'k*')
-   end
+    if p_vals(f) < 0.05/size(nov_sac_amps,2) %Bonferroni correction
+        plot(f,8.5,'k*')
+    end
 end
 hold off
 xlabel('Ordinal Saccade #')
@@ -278,3 +400,199 @@ ylim([5 9])
 axis square
 legend('Novel','Repeat')
 title(['PW and TO n_{sessions} = ' num2str(size(saccade_amplitudes,2)) ', p_{Wilcoxon} = ' num2str(p_wilx,3)])
+%% Post-hoc Power Analysis How many pairs of images you would need to show a difference
+
+n = sampsizepwr('t2',[mean(nanmean(nov_durs(:,3:12)')) std(nanmean(nov_durs(:,3:12)'))],...
+    [mean(nanmean(rep_durs(:,3:12)')) std(nanmean(rep_durs(:,3:12)'))],0.9)
+%%
+
+figure
+
+
+%---Vivian---%
+mns = mean(nov_fix_durs(which_monkey == 1,:),2);
+[r,p] = corrcoef(1:length(mns),mns);
+P = polyfit(1:length(mns),mns',1);
+yfit = polyval(P,1:length(mns));
+
+subplot(2,3,1)
+hold on
+plot(mean(nov_fix_durs(which_monkey == 1,:),1))
+plot(mean(rep_fix_durs(which_monkey == 1,:),1))
+hold off
+legend('Novel','Repeat')
+xlabel('Ordinal Fixation #')
+ylabel('Fixation Duration (ms)')
+title('Vivian')
+yl = ylim;
+
+subplot(2,3,2)
+plot(mns,'.k')
+hold on
+plot(1:length(mns),yfit,'k')
+hold off
+xlabel('Session #')
+ylabel('Avg. Novel Fix. Dur. (ms)')
+ylim(yl)
+xlim([0 length(mns)+1])
+box off
+title(['Vivian: r = ' num2str(r(2),2) ', p = ' num2str(p(2),2) ', m = ' num2str(P(1),3)])
+
+[r,p] = corrcoef(trial_count(which_monkey == 1),mns);
+subplot(2,3,3)
+plot(mns,trial_count(which_monkey == 1),'k.')
+ylabel('# of Trials Completed')
+xlabel('Avg. Novel Fix. Dur. (ms)')
+title(['Vivian: r = ' num2str(r(2),2) ', p = ' num2str(p(2),2)])
+box off
+
+[r,p] = corrcoef(1:length(mns),trial_count(which_monkey == 1));
+subplot(2,3,6)
+plot(1:length(trial_count(which_monkey == 1)),trial_count(which_monkey == 1),'k.')
+xlabel('Session #')
+ylabel('Trial Count')
+xlim([0 length(mns)+1])
+box off
+title(['Vivian: r = ' num2str(r(2),2) ', p = ' num2str(p(2),2)])
+
+
+%---Tobii---%
+mns = mean(nov_fix_durs(which_monkey == 2,:),2);
+[r,p] = corrcoef(1:length(mns),mns);
+P = polyfit(1:length(mns),mns',1);
+yfit = polyval(P,1:length(mns));
+
+subplot(2,3,4)
+hold on
+plot(mean(nov_fix_durs(which_monkey == 2,:),1))
+plot(mean(rep_fix_durs(which_monkey == 2,:),1))
+hold off
+legend('Novel','Repeat')
+xlabel('Ordinal Fixation #')
+ylabel('Fixation Duration (ms)')
+title('Tobii')
+yl = ylim;
+
+subplot(2,3,5)
+plot(mns,'.k')
+hold on
+plot(1:length(mns),yfit,'k')
+hold off
+xlabel('Session #')
+ylabel('Avg. Novel Fix. Dur. (ms)')
+ylim(yl)
+xlim([0 length(mns)+1])
+box off
+title(['Tobii: r = ' num2str(r(2),2) ', p = ' num2str(p(2),2) ', m = ' num2str(P(1),3)])
+
+subtitle('Fixation Durations by Session # for ListSQ Recording Sessions')
+%%
+figure
+hold on
+plot(-twin:twin-1,1000/24*(mean(vel_profile)))
+plot(-twin:twin-1,1000/24*(mean(smoothed_vel_profile)))
+plot(-twin:twin-1,1000/24*(mean(smoothed_vel_profile2)))
+
+yl = ylim;
+plot([0 0],[yl(1) yl(2)],'k--')
+hold off
+xlabel('Time from Saccade Start (ms)')
+ylabel('Velocity (dva/s)')
+legend('Raw','LPF 30 Hz','LPF 100 Hz')
+
+%%
+raw = mean(vel_profile);
+raw = raw-mean(raw(1:twin));
+raw = raw/max(raw);
+
+filtered = mean(smoothed_vel_profile);
+filtered = filtered-mean(filtered(1:twin));
+filtered = filtered/max(filtered);
+
+filtered2 = mean(smoothed_vel_profile2);
+filtered2 = filtered2-mean(filtered2(1:twin));
+filtered2 = filtered2/max(filtered2);
+
+figure
+hold on
+plot(-twin:twin-1,raw)
+plot(-twin:twin-1,filtered);
+plot(-twin:twin-1,filtered2);
+yl = ylim;
+plot([0 0],[yl(1) yl(2)],'k--')
+hold off
+xlabel('Time from Saccade Start (ms)')
+ylabel('Normalized Velocity')
+legend('Raw','LPF 30 Hz','LPF 100 Hz')
+
+%%
+all_x_noise = [];
+all_y_noise = [];
+set_mean_noise = [];
+
+for set = 1:length(RMS_noise)
+    if ~isempty(RMS_noise{1,set})
+        all_x_noise = [all_x_noise; RMS_noise{1,set}(:)];
+        all_y_noise = [all_y_noise; RMS_noise{2,set}(:)];
+
+        set_mean_noise = [set_mean_noise [nanmean(RMS_noise{1,set}(:)); nanmean(RMS_noise{2,set}(:))]];
+    end
+end
+%%
+x_99 = prctile(all_x_noise,99);
+y_99 = prctile(all_y_noise,99);
+%%
+%%
+figure
+subplot(1,2,1)
+hold on
+histogram(set_mean_noise(1,:),25,'EdgeAlpha',0.5,'FaceAlpha',0.5,'FaceColor','b')
+histogram(set_mean_noise(2,:),25,'EdgeAlpha',0.5,'FaceAlpha',0.5,'FaceColor','r')
+hold off
+legend('X','Y')
+xlabel('Average Noise (\sigma)')
+ylabel('Session Count')
+title('Session Average')
+
+subplot(1,2,2)
+hold on
+histogram(all_x_noise,100,'EdgeAlpha',0.5,'FaceAlpha',0.5,'FaceColor','b')
+histogram(all_y_noise,100,'EdgeAlpha',0.5,'FaceAlpha',0.5,'FaceColor','r')
+hold off
+xlabel('Individual Fixation Noise (\sigma)')
+ylabel('Fixation Count')
+xlim([0 1])
+title(['99 pertcentile X = ' num2str(x_99,3) ', 99 percentile Y = ' num2str(y_99,3)])
+%%
+tm = -twin:twin-1;
+figure
+hold on
+plot(tm,24*nanmean(fixation_vel_profile))
+plot(tm,24*nanmean(vel_profile))
+hold off
+xlabel('Time from Eye Movement Start (ms)')
+ylabel('Eye Velocity (dva/sec)')
+xlim([-75 75])
+title('Raw Eye velocity')
+
+figure
+hold on
+plot(tm,24*nanmean(fixation_smoothed_vel_profile))
+plot(tm,24*nanmean(smoothed_vel_profile))
+hold off
+xlabel('Time from Eye Movement Start (ms)')
+ylabel('Eye Velocity (dva/sec)')
+xlim([-75 75])
+title('Over Smoothed')
+
+
+figure
+hold on
+plot(tm,24*nanmean(fixation_smoothed_vel_profile2))
+plot(tm,24*nanmean(smoothed_vel_profile2))
+hold off
+xlabel('Time from Eye Movement Start (ms)')
+ylabel('Eye Velocity (dva/sec)')
+xlim([-75 75])
+title('Less Smoothed')
+

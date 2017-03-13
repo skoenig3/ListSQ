@@ -347,6 +347,20 @@ for monk =2:-1:1
                     all_peak_seq = [all_peak_seq NaN];
                 end
                 
+                if~isnan(sig_p_seq(end))
+                    if isnan(all_context_gain2(end)) %can happen if no definable peaks so set as ratio of maximum firing rates
+                        all_context_gain2(end) =  all_peak_list(end)/all_peak_seq(end);
+                    elseif all_context_gain2(end) ~= all_peak_list(end)/all_peak_seq(end);
+                        error('Contextual gain 2 should be list peak/sequence peak')
+                    end
+                    
+                    if isnan(all_context_gain(end)) %can happen if no definable peaks so set as ratio of maximum firing rates
+                        all_context_gain(end) = (all_peak_list(end)-all_peak_seq(end))/all_peak_list(end);
+                    elseif  all_context_gain(end) ~= (all_peak_list(end)-all_peak_seq(end))/all_peak_list(end)
+                        error('Context gain should be the change in firing rate')
+                    end
+                end
+                
                 
             elseif ~isnan(spatial_info.shuffled_rate_prctile(unit))
                 

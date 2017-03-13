@@ -1,16 +1,11 @@
-% Code below creates population summary for Significnat Saccade Direction Cells
-% Written by Seth Konig
+% Code below creates population summary for Significnat Saccade Amplitude Cells
+% Written by Seth Konig modified from Population_Saccade_amplitude. on 1/31/2017
 % Code does the following
-% 1) Summarizes MRLs (mean resultant vector length) for place and non-place cells
-% 2) Summarize circular non-uniformity p-value (biased by fixation count and firing rate)
-% 3) Copies relevant figures for place cells to summary directory
-
-%Code rechecked by SDK on 1/5/2017
 
 clar %clear,clc
 
 %where to store spatial analysis figure copies
-summary_directory = 'C:\Users\seth.koenig\Desktop\Significant Units\Saccade Direction\';
+summary_directory = 'C:\Users\seth.koenig\Desktop\Significant Units\Saccade Amplitude\';
 if ~isdir(summary_directory)
     mkdir(summary_directory)
 end
@@ -20,14 +15,11 @@ min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any bloc
 Fs = 1000; %Hz sampling frequency
 imageX = 800; %horizontal image size
 imageY = 600; %vertical image size
+image_on_twin = 500;%ms
 
 %---Values All Fixations out2out and in2in---%
-all_mrls = []; %all observed MRLs (mean resultant vector length) ignoring out2in and in2out
-all_mrl_pctiles = []; %observed MRLs shuffled percentile ignoring out2in and in2out
-
-%---Values All Fixations out2out only---%
-all_mlrs_out = []; %observed MRLs for out2out fixations only
-all_mrl_out_pctiles = []; %observed MRLs shuffled percentile ignoring out2in and in2out
+all_corrs = []; %all correlation between firing rate and saccade amplitude
+all_corrs_pctiles = []; %observed shuffled percentile
 
 %---Other values---%
 spatialness = []; %1 for place cell, 0 for non place cell
@@ -35,7 +27,7 @@ all_unit_names = {};
 all_monkeys = []; %1s and 2s for monkeys
 
 figure_dir = {};
-all_dirs = []; %saccade directions for significant units
+all_sacamps = []; %saccade amplitudes for significant units
 for monkey = 2:-1:1
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
@@ -93,10 +85,10 @@ for monkey = 2:-1:1
         end
         
         disp(task_file(1:8))
-        if exist([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'],'file') %want to remove later
-            load([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'])
+        if exist([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat'],'file') %want to remove later
+            load([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat'])
             load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info')
-            load([data_dir  task_file(1:8) '-Place_Cell_Analysis.mat'],'saccade_direction');
+            load([data_dir  task_file(1:8) '-Eyemovement_Locked_List_results.mat'],'fixation_information');
         else
             if num_units ~= 0
                 error('Where is this file')
@@ -104,19 +96,27 @@ for monkey = 2:-1:1
             continue
         end
         
+        
         num_units = size(unit_stats,2);
         for unit = 1:num_units
-            if ~isnan(mrls.all_fixations(unit)) %if unit was processed
+            if ~isnan(amplitude_correlations(unit)) %if unit was processed
+                
+                %---Get Distribution of Saccade Amplitudes---%
+                sac_amps = fixation_information{unit}(:,6); %fixation aligned firing rate
+                sac_amps = sac_amps/24; %convert to dva
+                
+                %remove fixation within the first 500 ms of images on
+                %amplitude is affected by time within image period
+                time_from_image_on = fixation_information{unit}(:,4); %fixation aligned firing rate
+                too_early = find(time_from_image_on < image_on_twin);
+                sac_amps(too_early,:) = [];
+                
+                all_sacamps = [all_sacamps; sac_amps]; %store across sessions
                 
                 %---Values All Fixations out2out and in2in---%
-                all_mrls = [all_mrls mrls.all_fixations(unit)]; %all observed MRLs (mean resultant vector length) ignoring out2in and in2out
-                all_mrl_pctiles = [all_mrl_pctiles mrls.all_fixations_shuffled_prctile(unit)];%observed MRLs shuffled percentile ignoring out2in and in2out
-                
-                all_dirs = [all_dirs saccade_direction{unit}];
+                all_corrs = [all_corrs amplitude_correlations(unit)]; %all observed correlation
+                all_corrs_pctiles = [all_corrs_pctiles amplitude_correlations_percentile(unit)];%observed shuffled percentile
 
-                %---Values All Fixations out2out only---%
-                all_mlrs_out = [all_mlrs_out mrls.out2out(unit)]; %observed MRLs for out2out fixations only
-                all_mrl_out_pctiles = [all_mrl_out_pctiles mrls.out2out_shuffled_prctile(unit)]; %observed MRLs shuffled percentile ignoring out2in and in2out
                 
                 %---Other values---%
                 all_unit_names = [all_unit_names {[task_file(1:end-11) '_' unit_stats{1,unit}]}];
@@ -133,18 +133,16 @@ end
 %%
 clc
 disp([num2str(nansum(spatialness)) ' place cells'])
-disp([num2str(sum(all_mrl_pctiles > 95)) ' directionally modulated cells for "all fixations"'])
-disp([num2str(sum(all_mrl_out_pctiles > 95)) ' directionally modulated cells for OUT2OUT fixations'])
-disp([num2str(sum(all_mrl_out_pctiles > 95 & all_mrl_pctiles > 95)) ' directionally modulated cells for OUT2OUT fixations & "all fixations"'])
+disp([num2str(sum(all_corrs_pctiles > 97.5)) ' amplitude modulated cells'])
 disp('--------------------------------------------------------------')
-disp([num2str(sum(all_mrl_pctiles > 95 & spatialness == 1)) ' directionally modulated place cells for "all fixations"'])
-disp([num2str(sum(all_mrl_out_pctiles > 95 & spatialness == 1)) ' directionally modulated place cells for OUT2OUT fixations'])
+disp([num2str(sum(all_corrs_pctiles > 97.5 & spatialness == 1)) ' amplitude modulated place cells'])
+disp([num2str(sum(all_corrs_pctiles > 97.5 & spatialness == 0)) ' amplitude modulated non-place cells '])
 %%
 %%---Copy Relevant Figures to Summary Directory---%
 for unit = 1:length(all_unit_names)
-    if all_mrl_pctiles(unit) > 95
-        sub_dir1 = 'Saccade Direction\';
-        name1 = [all_unit_names{unit} '_Saccade_Direction_Analysis.png'];
+    if all_corrs_pctiles(unit) > 97.5
+        sub_dir1 = 'Saccade Amplitude\';
+        name1 = [all_unit_names{unit} '_Saccade_Amplitude_Analysis.png'];
         if spatialness(unit) == 1 %place cell
             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
                 [summary_directory 'Place\' name1])
@@ -154,18 +152,3 @@ for unit = 1:length(all_unit_names)
         end
     end
 end
-
-%% Distribution of Saccade Directions
-smval_deg =18; %9 degrees std
-
-binned_dirs = zeros(1,360);
-degrees = [-180:180];
-for b = 1:length(degrees)-1
-    binned_dirs(b) = sum(all_dirs < degrees(b+1) & all_dirs >= degrees(b));
-end
-degrees = degrees*pi/180;
-
-bf = [binned_dirs(end-(3*smval_deg):end) binned_dirs binned_dirs(1:3*smval_deg)];%so don't get edege artifacts
-binned_dirs = nandens(bf,smval_deg,'gauss',1); %smooth to display firing rate by saccade direction
-binned_dirs = binned_dirs(3*smval_deg+2:end-3*smval_deg);%remove buffers
-polarplot(degrees,[binned_dirs(end) binned_dirs])
