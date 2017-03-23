@@ -34,9 +34,10 @@ twin = 100;
 which_monkey =[];
 trial_count = [];
 
+
 RMS_noise = cell(2,85); %variability in fixation position as a liberal estimate of eye tracking noise
 %row 1 is x, row 2 is y
-for monkey = 1:2
+for monkey =2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
@@ -50,7 +51,7 @@ for monkey = 1:2
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
         predict_rt = 156;%156 ms prediction 5-percentile
-        chamber_zero = [13.5 -11]; %AP ML[
+        chamber_zero = [13.5 -11]; %AP ML
         
     elseif monkey ==2%strcmpi(monkey,'Tobii')
         excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Tobii\';
@@ -97,7 +98,7 @@ for monkey = 1:2
         saccade_amplitudes{2,set} = NaN(96,40);
         saccade_durations{1,set} = NaN(96,40);
         saccade_durations{2,set} = NaN(96,40);
-        RMS_noise{1,set} = NaN(192,40);%x 
+        RMS_noise{1,set} = NaN(192,40);%x
         RMS_noise{2,set} = NaN(192,40);%y
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -107,15 +108,14 @@ for monkey = 1:2
         
         %velocity aligned to saccade
         v_profile = NaN(4000,twin*2);
-        sv_profile = NaN(4000,twin*2);    
+        sv_profile = NaN(4000,twin*2);
         sv_profile2 = NaN(4000,twin*2);
         
         %velocity aligned to fixation
         fv_profile = NaN(4000,twin*2);
         fsv_profile = NaN(4000,twin*2);
         fsv_profile2 = NaN(4000,twin*2);
-
-
+        
         vind = 1;
         for t = 1:num_trials
             if any(cfg.trl(t).allval == img_on_code) && itmlist(cfg.trl(t).cnd-1000) > sequence_items(end) %only want image trials
@@ -151,7 +151,7 @@ for monkey = 1:2
                 vel = [];
                 svel = [];
                 svel2 = [];
-
+                
                 parsed_eyedat = preparse(xy);
                 
                 for p = 1:length(parsed_eyedat)
@@ -196,7 +196,7 @@ for monkey = 1:2
                         svely = diff(yss);
                         sv2 = sqrt(svelx.^2+svely.^2);
                         sv2(end+1) = sv2(end);
-
+                        
                         svel2 = [svel2 sv2];
                         
                     else
@@ -228,9 +228,9 @@ for monkey = 1:2
                 
                 for f = 1:size(fixationtimes,2)%ignore first fixation not sure where it was/possibly contaminated anyway
                     
-                     RMS_noise{1,set}(img_index,f) = std(xy(1,fixationtimes(1,f):fixationtimes(2,f)))/24; %std/rms in dva
-                     RMS_noise{2,set}(img_index,f) = std(xy(2,fixationtimes(1,f):fixationtimes(2,f)))/24; %std/rms in dva
-
+                    RMS_noise{1,set}(img_index,f) = std(xy(1,fixationtimes(1,f):fixationtimes(2,f)))/24; %std/rms in dva
+                    RMS_noise{2,set}(img_index,f) = std(xy(2,fixationtimes(1,f):fixationtimes(2,f)))/24; %std/rms in dva
+                    
                     if f == 1
                         sacamp = sqrt(sum((fixations(:,1)-[400;300]).^2));
                         saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
@@ -240,6 +240,7 @@ for monkey = 1:2
                             continue;
                         end
                         sacamp = sqrt(sum((xy(:,saccadetimes(2,prior_sac))-xy(:,saccadetimes(1,prior_sac))).^2)); %saccade amplitude
+                        
                         saccade_amplitudes{nvr,set}(which_image,f) = sacamp;
                         
                         
@@ -254,18 +255,19 @@ for monkey = 1:2
                     end
                 end
             end
+            
         end
         which_monkey(set) = monkey;
         trial_count(set) = num_trials;
         
-        vel_profile = [vel_profile; nanmean(v_profile) ];
-        smoothed_vel_profile = [smoothed_vel_profile; nanmean(sv_profile)];
-        smoothed_vel_profile2 = [smoothed_vel_profile2; nanmean(sv_profile2)];
+        vel_profile = [vel_profile; nanmedian(v_profile) ];
+        smoothed_vel_profile = [smoothed_vel_profile; nanmedian(sv_profile)];
+        smoothed_vel_profile2 = [smoothed_vel_profile2; nanmedian(sv_profile2)];
         
-
-        fixation_vel_profile = [fixation_vel_profile; nanmean(fv_profile) ];
-        fixation_smoothed_vel_profile = [fixation_smoothed_vel_profile; nanmean(fsv_profile)];
-        fixation_smoothed_vel_profile2 = [fixation_smoothed_vel_profile2; nanmean(fsv_profile2)];
+        
+        fixation_vel_profile = [fixation_vel_profile; nanmedian(fv_profile) ];
+        fixation_smoothed_vel_profile = [fixation_smoothed_vel_profile; nanmedian(fsv_profile)];
+        fixation_smoothed_vel_profile2 = [fixation_smoothed_vel_profile2; nanmedian(fsv_profile2)];
     end
 end
 
@@ -281,7 +283,7 @@ for set = 1:size(fixation_durations,2);
     nov_durs = fixation_durations{1,set}; %novel images
     rep_durs = fixation_durations{2,set}; %repeat images
     
-    %remove fixations shorter than 100 msin duration since removed from analysis
+    %remove fixations shorter than 100 ms in duration since removed from analysis
     nov_durs(nov_durs < 100) = NaN;
     rep_durs(rep_durs < 100) = NaN;
     
@@ -302,10 +304,10 @@ end
 %---Plot Results---%
 figure
 hold on
-plot(nanmean(nov_fix_durs))
-errorb(1:20,nanmean(nov_fix_durs),nanstd(nov_fix_durs)./sqrt(sum(~isnan(nov_fix_durs))),'color','b')
-plot(nanmean(rep_fix_durs),'r')
-errorb(1:20,nanmean(rep_fix_durs),nanstd(rep_fix_durs)./sqrt(sum(~isnan(rep_fix_durs))),'color','r')
+plot(nanmedian(nov_fix_durs))
+errorb(1:20,nanmedian(nov_fix_durs),nanstd(nov_fix_durs)./sqrt(sum(~isnan(nov_fix_durs))),'color','b')
+plot(nanmedian(rep_fix_durs),'r')
+errorb(1:20,nanmedian(rep_fix_durs),nanstd(rep_fix_durs)./sqrt(sum(~isnan(rep_fix_durs))),'color','r')
 for f = 1:size(nov_fix_durs,2)
     if p_vals(f) < 0.05/size(nov_fix_durs,2) %Bonferroni correction
         plot(f,215,'k*')
@@ -326,12 +328,12 @@ durs(durs > 400) = [];
 figure
 hist(durs,301)
 hold on
-plot([round(nanmean(durs)) round(nanmean(durs))],[0 2000],'k--')
+plot([round(nanmedian(durs)) round(nanmedian(durs))],[0 2000],'k--')
 hold off
 xlabel('Fixation Duration (ms)')
 ylabel('Count')
 title(sprintf(['Distribution of Fixation Durations \n'...
-    'mean = ' num2str(round(nanmean(durs))) ' ms median = ' num2str(round(nanmedian(durs))) ' ms']))
+    'mean = ' num2str(round(nanmedian(durs))) ' ms median = ' num2str(round(nanmedian(durs))) ' ms']))
 axis square
 
 %% Distribution of All Saccade Durations
@@ -346,26 +348,31 @@ durs(durs > 80) = [];
 figure
 hist(durs,70)
 hold on
-plot([round(nanmean(durs)) round(nanmean(durs))],[0 14000],'k--')
+plot([round(nanmedian(durs)) round(nanmedian(durs))],[0 14000],'k--')
 hold off
 xlim([10 80])
 xlabel('saccade Duration (ms)')
 ylabel('Count')
 title(sprintf(['Distribution of Sacccade Durations \n'...
-    'mean = ' num2str(round(nanmean(durs))) ' ms median = ' num2str(round(nanmedian(durs))) ' ms']))
+    'mean = ' num2str(round(nanmedian(durs))) ' ms median = ' num2str(round(nanmedian(durs))) ' ms']))
 axis square
 box off
 %% Distribution of Saccade Ampltiudes
 
 nov_sac_amps = NaN(size(saccade_amplitudes,2),20); %median by set novel saccade_amplitude
 rep_sac_amps = NaN(size(saccade_amplitudes,2),20); %median by set repeat saccade_amplitude
+all_amplitudes = [];
 for set = 1:size(saccade_amplitudes,2);
     nov_sac = saccade_amplitudes{1,set}/24; %novel  images and convert from pixel to dva
     rep_sac = saccade_amplitudes{2,set}/24; %repeat images and convert from pixel to dva
     
+    all_amplitudes = [all_amplitudes nov_sac rep_sac];
+    
+    
     %remove saccades smaller than 2 dva
-    nov_sac(nov_durs < 2) = NaN;
-    rep_sac(rep_durs < 2) = NaN;
+    nov_sac(nov_sac < 2) = NaN;
+    rep_sac(nov_sac < 2) = NaN;
+    
     
     nov_sac_amps(set,:) = nanmedian(nov_sac(:,1:20)); %novel
     rep_sac_amps(set,:) = nanmedian(rep_sac(:,1:20)); %repeat
@@ -383,10 +390,10 @@ end
 %---Plot Results---%
 figure
 hold on
-plot(nanmean(nov_sac_amps))
-errorb(1:20,nanmean(nov_sac_amps),nanstd(nov_sac_amps)./sqrt(sum(~isnan(nov_sac_amps))),'color','b')
-plot(nanmean(rep_sac_amps),'r')
-errorb(1:20,nanmean(rep_sac_amps),nanstd(rep_sac_amps)./sqrt(sum(~isnan(rep_sac_amps))),'color','r')
+plot(nanmedian(nov_sac_amps))
+errorb(1:20,nanmedian(nov_sac_amps),nanstd(nov_sac_amps)./sqrt(sum(~isnan(nov_sac_amps))),'color','b')
+plot(nanmedian(rep_sac_amps),'r')
+errorb(1:20,nanmedian(rep_sac_amps),nanstd(rep_sac_amps)./sqrt(sum(~isnan(rep_sac_amps))),'color','r')
 for f = 1:size(nov_sac_amps,2)
     if p_vals(f) < 0.05/size(nov_sac_amps,2) %Bonferroni correction
         plot(f,8.5,'k*')
@@ -402,8 +409,8 @@ legend('Novel','Repeat')
 title(['PW and TO n_{sessions} = ' num2str(size(saccade_amplitudes,2)) ', p_{Wilcoxon} = ' num2str(p_wilx,3)])
 %% Post-hoc Power Analysis How many pairs of images you would need to show a difference
 
-n = sampsizepwr('t2',[mean(nanmean(nov_durs(:,3:12)')) std(nanmean(nov_durs(:,3:12)'))],...
-    [mean(nanmean(rep_durs(:,3:12)')) std(nanmean(rep_durs(:,3:12)'))],0.9)
+n = sampsizepwr('t2',[mean(nanmedian(nov_durs(:,3:12)')) std(nanmedian(nov_durs(:,3:12)'))],...
+    [mean(nanmedian(rep_durs(:,3:12)')) std(nanmedian(rep_durs(:,3:12)'))],0.9)
 %%
 
 figure
@@ -534,8 +541,8 @@ for set = 1:length(RMS_noise)
     if ~isempty(RMS_noise{1,set})
         all_x_noise = [all_x_noise; RMS_noise{1,set}(:)];
         all_y_noise = [all_y_noise; RMS_noise{2,set}(:)];
-
-        set_mean_noise = [set_mean_noise [nanmean(RMS_noise{1,set}(:)); nanmean(RMS_noise{2,set}(:))]];
+        
+        set_mean_noise = [set_mean_noise [nanmedian(RMS_noise{1,set}(:)); nanmedian(RMS_noise{2,set}(:))]];
     end
 end
 %%
@@ -567,8 +574,8 @@ title(['99 pertcentile X = ' num2str(x_99,3) ', 99 percentile Y = ' num2str(y_99
 tm = -twin:twin-1;
 figure
 hold on
-plot(tm,24*nanmean(fixation_vel_profile))
-plot(tm,24*nanmean(vel_profile))
+plot(tm,24*nanmedian(fixation_vel_profile))
+plot(tm,24*nanmedian(vel_profile))
 hold off
 xlabel('Time from Eye Movement Start (ms)')
 ylabel('Eye Velocity (dva/sec)')
@@ -577,8 +584,8 @@ title('Raw Eye velocity')
 
 figure
 hold on
-plot(tm,24*nanmean(fixation_smoothed_vel_profile))
-plot(tm,24*nanmean(smoothed_vel_profile))
+plot(tm,24*nanmedian(fixation_smoothed_vel_profile))
+plot(tm,24*nanmedian(smoothed_vel_profile))
 hold off
 xlabel('Time from Eye Movement Start (ms)')
 ylabel('Eye Velocity (dva/sec)')
@@ -588,11 +595,126 @@ title('Over Smoothed')
 
 figure
 hold on
-plot(tm,24*nanmean(fixation_smoothed_vel_profile2))
-plot(tm,24*nanmean(smoothed_vel_profile2))
+plot(tm,24*nanmedian(fixation_smoothed_vel_profile2))
+plot(tm,24*nanmedian(smoothed_vel_profile2))
 hold off
 xlabel('Time from Eye Movement Start (ms)')
 ylabel('Eye Velocity (dva/sec)')
 xlim([-75 75])
 title('Less Smoothed')
 
+
+%% Seperate Fixation Durations by "high" and "low" recognition
+
+%---Based on Change in Fixation Duration---%
+%under idea that large changes are correlated with high recogntion trials
+nov_small_diff = [];%low
+rep_small_diff = [];%low
+nov_large_diff = [];%high
+rep_large_diff = [];%high
+
+%---Based soley on Repeat Fixation Duration---%
+%under idea that long repeat fixation durations are correlated with high recogntion trials
+nov_short_rep = [];%low
+rep_short_rep = [];%low
+nov_long_rep = [];%high
+rep_long_rep = [];%high
+
+%---Based soley on Novel Fixation Duration---%
+%under idea that long repeat fixation durations are correlated with high recogntion trials
+nov_short_nov = [];%low
+rep_short_nov = [];%low
+nov_long_nov = [];%high
+rep_long_nov = [];%high
+
+for set = 1:size(fixation_durations,2);
+    nov_durs = nanmedian(fixation_durations{1,set}(:,1:18)'); %novel images (:,3:12)
+    rep_durs = nanmedian(fixation_durations{2,set}(:,1:18)'); %repeat images (:,3:12)
+
+    %---Based on Change in Fixation Duration---%
+    diff = rep_durs-nov_durs;
+    
+    upper_33 = find(diff >= prctile(diff,67));%high
+    lower_33 = find(diff <= prctile(diff,33));%low
+    
+    nov_small_diff = [nov_small_diff; nanmedian(fixation_durations{1,set}(lower_33,1:18))]; %low
+    rep_small_diff = [rep_small_diff; nanmedian(fixation_durations{2,set}(lower_33,1:18))];%low
+    nov_large_diff = [nov_large_diff; nanmedian(fixation_durations{1,set}(upper_33,1:18))];%high
+    rep_large_diff = [rep_large_diff; nanmedian(fixation_durations{2,set}(upper_33,1:18))];%high
+
+    
+    %---Based soley on Repeat Fixation Duration---%
+    upper_33 = find(rep_durs >= prctile(rep_durs,67));%high
+    lower_33 = find(rep_durs <= prctile(rep_durs,33));%low
+    
+    nov_short_rep = [nov_short_rep; nanmedian(fixation_durations{1,set}(lower_33,1:18))]; %low
+    rep_short_rep = [rep_short_rep; nanmedian(fixation_durations{2,set}(lower_33,1:18))];%low
+    nov_long_rep = [nov_long_rep; nanmedian(fixation_durations{1,set}(upper_33,1:18))];%high
+    rep_long_rep = [rep_long_rep; nanmedian(fixation_durations{2,set}(upper_33,1:18))];%high
+    
+    %---Based soley on Novel Fixation Duration---%
+    upper_33 = find(nov_durs >= prctile(nov_durs,67));%high
+    lower_33 = find(nov_durs <= prctile(nov_durs,33));%low
+    
+    nov_short_nov = [nov_short_nov; nanmedian(fixation_durations{1,set}(lower_33,1:18))]; %low
+    rep_short_nov = [rep_short_nov; nanmedian(fixation_durations{2,set}(lower_33,1:18))];%low
+    nov_long_nov = [nov_long_nov; nanmedian(fixation_durations{1,set}(upper_33,1:18))];%high
+    rep_long_nov = [rep_long_nov; nanmedian(fixation_durations{2,set}(upper_33,1:18))];%high
+end
+
+figure
+subplot(2,2,1)
+hold on
+plot(nanmedian(nov_small_diff),'b')
+errorb(1:18,nanmedian(nov_small_diff),nanstd(nov_small_diff)./sqrt(sum(~isnan(nov_small_diff))),'color','b')
+plot(nanmedian(rep_small_diff),'r')
+errorb(1:18,nanmedian(rep_small_diff),nanstd(rep_small_diff)./sqrt(sum(~isnan(rep_small_diff))),'color','r')
+plot(nanmedian(nov_large_diff),'g')
+errorb(1:18,nanmedian(nov_large_diff),nanstd(nov_large_diff)./sqrt(sum(~isnan(nov_large_diff))),'color','g')
+plot(nanmedian(rep_large_diff),'k')
+errorb(1:18,nanmedian(rep_large_diff),nanstd(rep_large_diff)./sqrt(sum(~isnan(rep_large_diff))),'color','k')
+hold off
+xlim([0 20])
+xlabel('Ordinal Fixation #')
+ylabel('Fixation Duration (ms)')
+legend('Low Nov','Low Rep','High Nov','High Rep')
+title('Seperated by Change in Fixation Duration')
+ylim([150 250])
+
+subplot(2,2,2)
+hold on
+plot(nanmedian(nov_short_rep),'b')
+errorb(1:18,nanmedian(nov_short_rep),nanstd(nov_short_rep)./sqrt(sum(~isnan(nov_short_rep))),'color','b')
+plot(nanmedian(rep_short_rep),'r')
+errorb(1:18,nanmedian(rep_short_rep),nanstd(rep_short_rep)./sqrt(sum(~isnan(rep_short_rep))),'color','r')
+plot(nanmedian(nov_long_rep),'g')
+errorb(1:18,nanmedian(nov_long_rep),nanstd(nov_long_rep)./sqrt(sum(~isnan(nov_long_rep))),'color','g')
+plot(nanmedian(rep_long_rep),'k')
+errorb(1:18,nanmedian(rep_long_rep),nanstd(rep_long_rep)./sqrt(sum(~isnan(rep_long_rep))),'color','k')
+hold off
+ylim([150 250])
+xlim([0 20])
+xlabel('Ordinal Fixation #')
+ylabel('Fixation Duration (ms)')
+title('Seperated by Repeat Fixation Duration')
+
+subplot(2,2,3)
+hold on
+plot(nanmedian(nov_short_nov),'b')
+errorb(1:18,nanmedian(nov_short_nov),nanstd(nov_short_nov)./sqrt(sum(~isnan(nov_short_nov))),'color','b')
+plot(nanmedian(rep_short_nov),'r')
+errorb(1:18,nanmedian(rep_short_nov),nanstd(rep_short_nov)./sqrt(sum(~isnan(rep_short_nov))),'color','r')
+plot(nanmedian(nov_long_nov),'g')
+errorb(1:18,nanmedian(nov_long_nov),nanstd(nov_long_nov)./sqrt(sum(~isnan(nov_long_nov))),'color','g')
+plot(nanmedian(rep_long_nov),'k')
+errorb(1:18,nanmedian(rep_long_nov),nanstd(rep_long_nov)./sqrt(sum(~isnan(rep_long_nov))),'color','k')
+hold off
+ylim([150 250])
+xlim([0 20])
+xlabel('Ordinal Fixation #')
+ylabel('Fixation Duration (ms)')
+title('Seperated by Novel Fixation Duration')
+
+
+
+ 

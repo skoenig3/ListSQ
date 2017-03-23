@@ -139,16 +139,16 @@ disp([num2str(sum(all_corrs_pctiles > 97.5 & spatialness == 1)) ' amplitude modu
 disp([num2str(sum(all_corrs_pctiles > 97.5 & spatialness == 0)) ' amplitude modulated non-place cells '])
 %%
 %%---Copy Relevant Figures to Summary Directory---%
-for unit = 1:length(all_unit_names)
-    if all_corrs_pctiles(unit) > 97.5
-        sub_dir1 = 'Saccade Amplitude\';
-        name1 = [all_unit_names{unit} '_Saccade_Amplitude_Analysis.png'];
-        if spatialness(unit) == 1 %place cell
-            copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
-                [summary_directory 'Place\' name1])
-        elseif spatialness(unit) == 0 %non place cell
-            copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
-                [summary_directory 'Non Place\' name1])
-        end
-    end
-end
+% for unit = 1:length(all_unit_names)
+%     if all_corrs_pctiles(unit) > 97.5
+%         sub_dir1 = 'Saccade Amplitude\';
+%         name1 = [all_unit_names{unit} '_Saccade_Amplitude_Analysis.png'];
+%         if spatialness(unit) == 1 %place cell
+%             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
+%                 [summary_directory 'Place\' name1])
+%         elseif spatialness(unit) == 0 %non place cell
+%             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
+%                 [summary_directory 'Non Place\' name1])
+%         end
+%     end
+% end

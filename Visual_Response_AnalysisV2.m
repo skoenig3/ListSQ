@@ -273,13 +273,13 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Plot and Save Figures of Results---%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-t12 = -twin1:twin2-1;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%t12 = -twin1:twin2-1;
 t13 = -twin1:twin3-1;
 t133 = -twin1:twin3-1+250;
 t3 = -twin3:twin3-1;
 t14 = -twin1:twin4-1;
 unit_names = unit_stats(1,:);
+
 for unit = 1:num_units
     if ~isempty(time_lock_firing{unit,1})
         

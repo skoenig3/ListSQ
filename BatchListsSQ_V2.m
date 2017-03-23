@@ -6,7 +6,7 @@ clar
 
 task = 'ListSQ';
 set(0,'DefaultFigureVisible','OFF');
-for monkey = 2:-1:1
+for monkey = 1%2:-1:1
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
@@ -107,7 +107,13 @@ for monkey = 2:-1:1
     %     for session = 1 :length(session_data)
     %         Visual_Response_Memory(data_dir,figure_dir,session_data{session});
     %     end
-    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Determine if Neurons are Frequency Modulated---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    for session = 1:length(session_data)
+        Spike_Eye_Frequency_Modulation_Analysis(data_dir,figure_dir,session_data{session})
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Temporally Modulated---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -139,9 +145,9 @@ for monkey = 2:-1:1
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Firing During ITI Period---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        for session =1:length(session_data)
-            ITI_analysis(data_dir,figure_dir,session_data{session})
-        end
+    %         for session =1:length(session_data)
+    %             ITI_analysis(data_dir,figure_dir,session_data{session})
+    %         end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Firing During ITI Period---%%%
