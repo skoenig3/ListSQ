@@ -29,7 +29,7 @@ whitening_filter = whitening_filter(1:16:end);%FFT was originally sampled at 2^1
 
 %---PSD Autocorrelation Parmaeters---%
 PSD_numshuffs = 1000;%10000;
-xc_PSD_numshuffs =1000;%cross correlation between eye movements and spikes
+xc_PSD_numshuffs =0%1000;%cross correlation between eye movements and spikes
 NFFT = 2^12;%number of frequency points from 0-Fs/2
 f2 = Fs/2*linspace(0,1,NFFT/2+1);%frequency values
 smFreqVal = 2;%how much smoothing is done in Hz e.g. +/- 1.0 Hz
@@ -94,7 +94,7 @@ list_spike_ac_observed_FFT = cell(1,num_units);
 list_spike_shuffled_ac = cell(5,num_units);
 list_spike_ac_shuffled_FFT = cell(5,num_units);
 list_spike_ac_shuffled_FFT_99 = cell(5,num_units);
-list_spike_ac_freq_of_interest = cell(5,num_units);
+list_spike_ac_freq_of_interest = cell(1,num_units);
 
 %---Sequence Spike Autocorrelation Analysis---%
 seq_spike_times = cell(1,num_units);
@@ -103,7 +103,7 @@ seq_spike_ac_observed_FFT = cell(1,num_units);
 seq_spike_shuffled_ac = cell(5,num_units);
 seq_spike_ac_shuffled_FFT = cell(5,num_units);
 seq_spike_ac_shuffled_FFT_99 = cell(5,num_units);
-seq_spike_ac_freq_of_interest = cell(5,num_units);
+seq_spike_ac_freq_of_interest = cell(1,num_units);
 
 %---List Eye Autocorrelation Analysis---%
 list_eye_times = cell(1,num_units);
@@ -112,7 +112,7 @@ list_eye_ac_observed_FFT = cell(1,num_units);
 list_eye_shuffled_ac = cell(3,num_units);
 list_eye_ac_shuffled_FFT = cell(3,num_units);
 list_eye_ac_shuffled_FFT_99 = cell(3,num_units);
-list_eye_ac_freq_of_interest = cell(3,num_units);
+list_eye_ac_freq_of_interest = cell(1,num_units);
 
 %---Sequence Eye Autocorrelation Analysis---%
 seq_eye_times = cell(1,num_units);
@@ -121,7 +121,7 @@ seq_eye_ac_observed_FFT = cell(1,num_units);
 seq_eye_shuffled_ac = cell(3,num_units);
 seq_eye_ac_shuffled_FFT = cell(3,num_units);
 seq_eye_ac_shuffled_FFT_99 = cell(3,num_units);
-seq_eye_ac_freq_of_interest = cell(3,num_units);
+seq_eye_ac_freq_of_interest = cell(1,num_units);
 
 %---List Spike-Eye Crosscorrelation Analysis---%
 list_spike_eye_xc_observed_xc = cell(1,num_units);
