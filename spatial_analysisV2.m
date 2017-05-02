@@ -72,6 +72,16 @@ switch task
         
         load([data_dir task_file(1:end-11) '-preprocessed.mat'],'meta');
         
+        %get a generic calibration function for now
+        if strcmpi(task_file(1:2),'TO')
+            load([data_dir 'TO151203_3-preprocessed.mat'],'tform');
+        else
+            load([data_dir 'PW140729_3-preprocessed.mat'],'tform');
+        end
+        
+        [eyechans] = find_desired_channels(cfg,'eye');
+
+        
         %slight bug in the timing file that reporst the wrong condition
         %number for a few trials on a few sessions which was later fixed,
         %removes 1 trial/block or path
@@ -101,10 +111,15 @@ switch task
         dotpos = cell(1,num_units);
         spike_times = cell(1,num_units);
         dotdirection = cell(1,num_units);
-        for unit = 1:num_units
+        correct_trials = cell(1,num_units);
+        cross_eyepos = cell(2,num_units);
+        for unit = 13%1:num_units
             spike_times{unit} = NaN(length(cfg.trl),3000);
             dotpos{unit} = NaN(2*length(cfg.trl),3000);
             dotdirection{unit} =  NaN(length(cfg.trl),3000);
+            correct_trials{unit} = NaN(1,length(cfg.trl));
+            cross_eyepos{1,unit} = zeros(imageY,imageX);
+            cross_eyepos{2,unit} = zeros(imageY,imageX);
         end
         
         for t = 1:length(cfg.trl);
@@ -113,7 +128,9 @@ switch task
                 pathon =  cfg.trl(t).alltim(cfg.trl(t).allval == dot_on_code)-trial_start; %meta data starts at 1st 666 which appears before dot actually turns on in event array
                 dot_clrchng = cfg.trl(t).alltim(cfg.trl(t).allval == dot_clrchng_code)-trial_start;
                 responded = cfg.trl(t).alltim(cfg.trl(t).allval == bar_code_response)-trial_start;
+                correct = 1;
                 if isempty(responded)%error trial
+                    correct = 0;
                     responded = cfg.trl(t).alltim(cfg.trl(t).allval == early_response_code)-trial_start; %look for early response
                     if isempty(responded)
                         responded = cfg.trl(t).alltim(cfg.trl(t).allval == late_response_code)-trial_start; %look for early response
@@ -127,16 +144,61 @@ switch task
                     end
                 end
                 
-                xn = interp1(meta(t).sample,meta(t).x,meta(t).sample(1):meta(t).sample(end),'cubic');
-                yn = interp1(meta(t).sample,meta(t).y,meta(t).sample(1):meta(t).sample(end),'cubic');
+                if length(meta(t).sample) < 50
+                    continue
+                end
+                if length(meta(t).sample) < 250
+                    xn = interp1(meta(t).sample,meta(t).x,meta(t).sample(1):meta(t).sample(end),'linear');
+                    yn = interp1(meta(t).sample,meta(t).y,meta(t).sample(1):meta(t).sample(end),'linear');
+                else
+                    xn = interp1(meta(t).sample,meta(t).x,meta(t).sample(1):meta(t).sample(end),'cubic');
+                    yn = interp1(meta(t).sample,meta(t).y,meta(t).sample(1):meta(t).sample(end),'cubic');
+                end
                 direction =  atan2(diff(yn),diff(xn));
                 direction = [direction direction(end)]; %correlated in time and want to make equal size to spike train
                 
-                for unit = 1:num_units
+                for unit = 13%1:num_units
                     if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only put data in for valid trials
                         spikes = find(data(unit).values{t});
                         spikeind = spikes(spikes > pathon & spikes <= responded)-pathon;
                         spikeind(spikeind < 1) = []; %should only happen when spikes occur at the same time as tstart
+                        
+                        if correct
+                            %generic calibration for now
+                            xeye = data(eyechans(1)).values{t}(pathon:responded);
+                            yeye = data(eyechans(2)).values{t}(pathon:responded);
+                            [xeye,yeye] = tformfwd(tform,xeye,yeye); 
+                            
+                            %convert from dva to pixels
+                            xeye = 24*xeye; 
+                            xeye = xeye+imageX/2;
+                            xeye = round(xeye);
+                            yeye = 24*yeye;
+                            yeye = yeye+imageY/2;
+                            yeye = round(yeye);
+
+                            for xy = 1:length(xeye)
+                                cross_eyepos{1,unit}(yeye(xy),xeye(xy)) = cross_eyepos{1,unit}(yeye(xy),xeye(xy)) + 1; %all time
+                            end
+                            
+                            %get eye pos when spike occurs
+                            for s = 1:length(spikeind)
+                                cross_eyepos{2,unit}(yeye(spikeind(s)),xeye(spikeind(s))) =...
+                                    cross_eyepos{2,unit}(yeye(spikeind(s)),xeye(spikeind(s))) +1;%just when spikes occur
+                            end
+                        end
+                        
+                        if all(isnan(xn)) && correct == 0
+                            %some error must of occured can't use this data
+                            %so continue and not worth it either
+                            continue
+                        elseif all(isnan(xn)) && correct == 1
+                            error('wtf')
+                        end
+                            
+                                                    
+                        correct_trials{unit}(t) = correct;
+                        
                         temp = zeros(1,length(xn));
                         temp(spikeind) = 1;
                         spike_times{unit}(t,1:length(temp)) = temp;
@@ -151,8 +213,10 @@ switch task
         
         %remove excess NaNs associated with error trials
         dotpos = laundry(dotpos);
+        correct_trials=laundry(correct_trials);
         spike_times = laundry(spike_times);
-        
+        dotdirection = laundry(dotdirection);
+           
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Perform Spatial analysis and signifance testing---%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -174,10 +238,20 @@ switch task
         spatial_info.spatialstability_even_odd_prctile = NaN(1,num_units);
         
         trial_data{3} = [imageX imageY];
-        for unit = 1:num_units
+        for unit = 13%1:num_units
             if ~isempty(dotpos{unit})
-                trial_data{1} = dotpos{unit};
-                trial_data{2} = spike_times{unit};
+                %remove data for incorrect trials since may not have been paying attention
+                dtpsx = dotpos{unit}(1:2:end,:);
+                dtpsx = dtpsx(correct_trials{unit} == 1,:);
+                dtpsy = dotpos{unit}(2:2:end,:);
+                dtpsy = dtpsy(correct_trials{unit} == 1,:);
+                
+                dtps = NaN(2*size(dtpsx,1),size(dtpsx,2));
+                dtps(1:2:end,:) = dtpsx;
+                dtps(2:2:end,:) = dtpsy;
+
+                trial_data{1} = dtps;
+                trial_data{2} = spike_times{unit}(correct_trials{unit} == 1,:);
                 
                 [observed_info_rate,shuffled_info_rate]...
                     = estimated_mutual_information(trial_data,numshuffs,info_type,[binsize,filter_width],Fs);
@@ -222,6 +296,16 @@ switch task
             path_numbers{unit} = paths; 
         end
         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %----Determine if Neuron is Directionally Modulated---%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        shuffled_95_direction_STA = cell(1,num_units);
+        observed_STA = cell(1,num_units);
+        observed_direction = cell(1,num_units);
+        for unit = 1:num_units
+            [shuffled_95_direction_STA{unit},observed_STA{unit},observed_direction{unit}] = ...
+                CVTNEW_Direction_Analysis(spike_times{unit},dotdirection{unit},numshuffs,correct_trials{unit});
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%---Plot and Save Figures of Results---%%%
@@ -230,6 +314,11 @@ switch task
         unit_names.multiunit = multiunit;
         unit_names.name = unit_stats(1,:);
         unit_names.path_number = path_numbers;
+        unit_names.correct_trials = correct_trials;
+        unit_names.eyepos = cross_eyepos;
+        spatial_info.shuffled_95_direction_STA = shuffled_95_direction_STA;
+        spatial_info.observed_STA = observed_STA;
+        spatial_info.observed_direction = observed_direction;
         spatial_analysis_plotsV2(figure_dir,task_file,dotpos,spike_times,spatial_info,task_type,...
             unit_names,[binsize,filter_width],imageX,imageY,NaN,Fs);
         
@@ -237,7 +326,8 @@ switch task
         %%%---Finally save all the data---%%%
         save([data_dir task_file(1:10) '-spatial_analysis_results.mat'],...
             'spike_times','dotpos','spatial_info','binsize','filter_width',...
-            'dotdirection','unit_names')
+            'dotdirection','unit_names','shuffled_95_direction_STA','observed_STA',...
+            'observed_direction')
         disp(['Spatial Data Analyis for ' task_file(1:10) ' saved']);
         
     case 'ListSQ'

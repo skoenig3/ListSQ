@@ -175,14 +175,33 @@ switch task_type
         binsize = smval(1); %number of pixels per spatial bing
         filter_width = smval(2); %std of 2D gaussian smoothing filter
         H = define_spatial_filter(filter_width);
+        H2 = fspecial('gaussian',6*1+1,1);%for filtering eye data on crosshair
+        
         
         for unit = 1:num_units
             
             if ~isempty(position{unit})
+                
+                correct_trials = unit_names.correct_trials{unit};
+                
+                %remove data for incorrect trials since may not have been paying attention
+                dtpsx =position{unit}(1:2:end,:);
+                dtpsx = dtpsx(correct_trials == 1,:);
+                dtpsy = position{unit}(2:2:end,:);
+                dtpsy = dtpsy(correct_trials == 1,:);
+                
+                dtps = NaN(2*size(dtpsx,1),size(dtpsx,2));
+                dtps(1:2:end,:) = dtpsx;
+                dtps(2:2:end,:) = dtpsy;
+                
+                position{unit} = dtps;
+                spike_times{unit} = spike_times{unit}(correct_trials == 1,:);
+                
+                
                 figure
                 
                 %spike postion overlaying dot position
-                make_spike_jittered_plot(position{unit},spike_times{unit},[2 3],1)
+                make_spike_jittered_plot(position{unit},spike_times{unit},[3 3],1)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 xlim([100 700])
@@ -193,7 +212,7 @@ switch task_type
                 %firing ratemap
                 [ratemap,~] = get_firing_rate_map_cvtnew({position{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all');
                 maxfr = prctile(ratemap(:),97.5);
-                subplot(2,3,4)
+                subplot(3,3,4)
                 h = imagesc(ratemap);
                 set(h,'alphadata',~isnan(ratemap));
                 axis off
@@ -212,12 +231,12 @@ switch task_type
                         num2str(spatial_info.spatialstability_halves_prctile(unit),2) '%%'];
                 end
                 title(sprintf(title_str))
-
-                path_number = unit_names.path_number{unit};
+                
+                path_number = unit_names.path_number{unit}(correct_trials == 1);
                 %spike position overlaying dot position for 1st path recorded
                 this_path = find(path_number == 1);
                 %num_trials = floor(size(spike_times{unit},1)/2);
-                make_spike_jittered_plot(position{unit}((2*this_path(1)-1):this_path(end)*2,:),spike_times{unit}(this_path,:),[2 3],2)
+                make_spike_jittered_plot(position{unit}((2*this_path(1)-1):this_path(end)*2,:),spike_times{unit}(this_path,:),[3 3],2)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 xlim([100 700])
@@ -226,21 +245,22 @@ switch task_type
                 axis square
                 title('1st Path')
                 
-                 %spike position overlaying dot position for 2nd path recorded
+                %spike position overlaying dot position for 2nd path recorded
                 this_path = find(path_number == 2);
-                make_spike_jittered_plot(position{unit}((2*this_path(1)-1):this_path(end)*2,:),spike_times{unit}(this_path,:),[2 3],5)
+                make_spike_jittered_plot(position{unit}((2*this_path(1)-1):this_path(end)*2,:),spike_times{unit}(this_path,:),[3 3],5)
                 set(gca,'Xcolor','w')
                 set(gca,'Ycolor','w')
                 xlim([100 700])
                 ylim([0 600])
                 axis off
-                axis square                
+                axis square
+                title('2nd path')
                 
                 num_not_nans = sum(~isnan(spike_times{unit}));
                 indeces = find(num_not_nans > 25);
                 
                 %firing rate curve aligned to do on
-                subplot(2,3,3)
+                subplot(3,3,3)
                 dofill2(1:length(indeces),spike_times{unit}(:,indeces),'black',1,60);
                 xlim([0 2000])
                 yl = ylim;
@@ -251,7 +271,7 @@ switch task_type
                 ylabel('Firing Rate (Hz)')
                 
                 %raster aligned to dot on
-                subplot(2,3,6)
+                subplot(3,3,6)
                 [trial,time] = find(spike_times{unit}(:,indeces) == 1);
                 if ~isempty(trial)
                     plot(time,trial,'.k')
@@ -262,10 +282,43 @@ switch task_type
                 xlabel('Time from Dot On (ms)')
                 box off
                 
+                subplot(3,3,7)
+                imagesc(log10(imfilter(unit_names.eyepos{1,unit},H2)))
+                hold on
+                rectangle('Position',[400-54/2 300-54/2 54 54],'EdgeColor',[1 1 1],'LineWidth',2)
+                hold off
+                xlim([350 450])
+                ylim([250 350])
+                axis off
+                axis square
+                title('Log_{10} All Eye Position')
+                
+                subplot(3,3,8)
+                imagesc(log10(imfilter(unit_names.eyepos{2,unit},H2)))
+                hold on
+                rectangle('Position',[400-54/2 300-54/2 54 54],'EdgeColor',[1 1 1],'LineWidth',2)
+                hold off
+                xlim([350 450])
+                ylim([250 350])
+                axis off
+                axis square
+                title('Log_{10} Eye Pos. When Spike')
+                
+                subplot(3,3,9)
+                plot(-1000:1000,spatial_info.observed_STA{unit},'k')
+                hold on
+                plot(-1000:1000,spatial_info.shuffled_95_direction_STA{unit},'r')
+                hold off
+                xlabel('Time')
+                ylabel('MRL')
+                title('Direction STA')
+                box off
+                
+                
                 if unit_names.multiunit(unit)
-                    subtitle(['Multiunit ' unit_names.name{unit} ]);
+                    subtitle(['Multiunit ' task_file(1:end-11) ' ' unit_names.name{unit} ]);
                 else
-                    subtitle(unit_names.name{unit});
+                    subtitle([task_file(1:end-11) ' ' unit_names.name{unit}]);
                 end
                 save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_names.name{unit} '_cvtnew_spatial_analysis']);
             end
