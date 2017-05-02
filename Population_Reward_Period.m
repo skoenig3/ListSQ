@@ -10,9 +10,11 @@ imageY = 600;
 
 
 Reward_firing = [];
+spatialness = [];
 cell_count = zeros(2,2);
 sig_count = zeros(1,2);
 all_unit_names = {};
+FWHM = [];
 for monkey = 1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
@@ -50,6 +52,7 @@ for monkey = 1:2
         
         
         load([data_dir task_file(1:end-11) '-preprocessed.mat'],'valid_trials','cfg','hdr','data','fixationstats');
+            
         
         %get unit data
         [multiunit,unit_stats,num_units] = get_unit_names(cfg,hdr,data,unit_names,...
@@ -61,12 +64,14 @@ for monkey = 1:2
             continue
         end
         
-        disp(['Importing ' task_file(1:8)])
+        %load spatial analysis data
+        disp(task_file(1:8))
+        load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info')
         
         for unit = 1:num_units
             if ~isempty(time_locked_firing{unit})
                 if (temporal_info.rate_prctile(unit) > 95) && (temporal_info.temporalstability_prctile(1,unit) > 95)
-                    firing_rate = time_locked_firing{unit}(:,1:1000);
+                    firing_rate = time_locked_firing{unit}(:,1:1100);
                     [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
                     firing_rate = firing_rate-nanmean(firing_rate(:,1:twin));
                     if max(firing_rate) > abs(min(firing_rate)) %normalize to max
@@ -75,6 +80,29 @@ for monkey = 1:2
                         firing_rate = firing_rate/min(firing_rate);
                     end
                     Reward_firing = [Reward_firing ; firing_rate];
+                    
+                    %is unit spatially modulated
+                    if (spatial_info.shuffled_rate_prctile(unit) > 95) ... %skagg 95%+
+                            && (spatial_info.spatialstability_halves_prctile(unit) > 95) %spatial stability
+                        spatialness = [spatialness 1]; %place cell
+                    else
+                        spatialness = [spatialness 0]; %non-place cell
+                    end
+
+                    [mx,max_tuning_ind] = max(firing_rate);
+                    large_ind = find(firing_rate > 0.5);
+                    gaps = findgaps(large_ind);
+                    window = [];
+                    for g =1:size(gaps,1)
+                        gp = gaps(g,:);
+                        gp(gp == 0) = [];
+                        if any(gp == max_tuning_ind)
+                            window = gp;
+                            break
+                        end
+                    end
+
+                    FWHM = [FWHM [max_tuning_ind; length(window)]];
                     cell_count(1,monkey) = cell_count(monkey)+1;
                     sig_count(monkey) =sig_count(1,monkey)+1;
                     all_unit_names = [all_unit_names {[task_file(1:end-11) '_' unit_stats{1,unit}]}];
