@@ -16,26 +16,41 @@ min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any bloc
 Fs = 1000; %Hz sampling frequency
 twin = 500;%maximum lag on correlations
 tm = -twin:twin;%time vector
-min_spike_count = 100;%don't analyze epoch if not enough spikes, can be both or either List/Sequence
+min_spike_count = 250;%don't analyze epoch if not enough spikes, can be both or either List/Sequence
 image_on_twin = 500;%ignore first 500 ms
 img_on_code = 23;%also first item on code in sequence task
 img_off_code = 24;
 reward_code = 3;
 trial_start_code = 15;
-%load whitening filter used to detect peaks
-load(['C:\Users\seth.koenig\Documents\MATLAB\ListSQ\AutoCorrWhitenFilter.mat']);
-whitening_filter(1) = 10*max(whitening_filter);
-whitening_filter = whitening_filter(1:16:end);%FFT was originally sampled at 2^16 
+pthresh = 99;%p < 0.01, bonferroni corrected 0.05/5 since testing 5 frequencies
 
 %---PSD Autocorrelation Parmaeters---%
 PSD_numshuffs = 1000;%10000;
-xc_PSD_numshuffs =0%1000;%cross correlation between eye movements and spikes
 NFFT = 2^12;%number of frequency points from 0-Fs/2
 f2 = Fs/2*linspace(0,1,NFFT/2+1);%frequency values
+lower_bound_frequencies = [4 10 20 30 100];
+
+%find indicese in f2 that correspond to start of these bands
+lower_bound_frequencies_ind = NaN(1,length(lower_bound_frequencies));
+for f = 1:length(lower_bound_frequencies);
+    ind = find(f2 >= lower_bound_frequencies(f));
+    ind = ind(1);
+    lower_bound_frequencies_ind(f) =  ind;
+end
+
+%---Low Frequency Filter---%
 smFreqVal = 2;%how much smoothing is done in Hz e.g. +/- 1.0 Hz
 freq_filt = ones(1,round(smFreqVal/mode(diff(f2)))); %square window/moving average
 freq_filt = freq_filt/sum(freq_filt);%zero sum filter
+Hz1 = round(smFreqVal/2/mode(diff(f2)));
+Hz4 = Hz1*4;
 
+%---High Frequency Filter---%
+smFreqVal2 = 10;%how much smoothing is done in Hz e.g. +/- 5.0 Hz
+freq_filt2 = ones(1,round(smFreqVal2/mode(diff(f2)))); %square window/moving average
+freq_filt2 = freq_filt2/sum(freq_filt2);%zero sum filter
+Hz400 = find(f2 >= 400);
+Hz400 = Hz400(1);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Import Task Data---%%%
@@ -87,59 +102,44 @@ load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_inf
 %%%---Variables to be Saved---%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%---Whole session spike autocorrelation Analysis---%
+whole_spike_times = cell(1,num_units);
+whole_spike_count = zeros(1,num_units);
+whole_spike_ac_observed_ac = cell(1,num_units);
+whole_spike_ac_observed_FFT = cell(1,num_units);
+whole_spike_ac_shuffled_ac_mean = cell(num_units,length(lower_bound_frequencies));
+whole_spike_ac_shuffled_FFT_99 = cell(num_units,length(lower_bound_frequencies));
+whole_spike_ac_significant_freq = cell(1,num_units);
+
 %---List Spike Autocorrelation Analysis---%
 list_spike_times = cell(1,num_units);
 list_spike_ac_observed_ac = cell(1,num_units);
 list_spike_ac_observed_FFT = cell(1,num_units);
-list_spike_shuffled_ac = cell(5,num_units);
-list_spike_ac_shuffled_FFT = cell(5,num_units);
-list_spike_ac_shuffled_FFT_99 = cell(5,num_units);
-list_spike_ac_freq_of_interest = cell(1,num_units);
 
 %---Sequence Spike Autocorrelation Analysis---%
 seq_spike_times = cell(1,num_units);
 seq_spike_ac_observed_ac = cell(1,num_units);
 seq_spike_ac_observed_FFT = cell(1,num_units);
-seq_spike_shuffled_ac = cell(5,num_units);
-seq_spike_ac_shuffled_FFT = cell(5,num_units);
-seq_spike_ac_shuffled_FFT_99 = cell(5,num_units);
-seq_spike_ac_freq_of_interest = cell(1,num_units);
 
 %---List Eye Autocorrelation Analysis---%
 list_eye_times = cell(1,num_units);
 list_eye_ac_observed_ac = cell(1,num_units);
 list_eye_ac_observed_FFT = cell(1,num_units);
-list_eye_shuffled_ac = cell(3,num_units);
-list_eye_ac_shuffled_FFT = cell(3,num_units);
-list_eye_ac_shuffled_FFT_99 = cell(3,num_units);
-list_eye_ac_freq_of_interest = cell(1,num_units);
 
 %---Sequence Eye Autocorrelation Analysis---%
 seq_eye_times = cell(1,num_units);
 seq_eye_ac_observed_ac = cell(1,num_units);
 seq_eye_ac_observed_FFT = cell(1,num_units);
-seq_eye_shuffled_ac = cell(3,num_units);
-seq_eye_ac_shuffled_FFT = cell(3,num_units);
-seq_eye_ac_shuffled_FFT_99 = cell(3,num_units);
-seq_eye_ac_freq_of_interest = cell(1,num_units);
 
 %---List Spike-Eye Crosscorrelation Analysis---%
 list_spike_eye_xc_observed_xc = cell(1,num_units);
 list_spike_eye_xc_observed_max_xc = NaN(1,num_units);
 list_spike_eye_xc_observed_FFT = cell(1,num_units);
-list_spike_eye_xc_shuffled_xc = cell(1,num_units);
-list_spike_eye_xc_shuffled_max_xc = cell(1,num_units);
-list_spike_eye_xc_shuffled_FFT = cell(1,num_units);
-list_spike_eye_xc_shuffled_FFT_99 = cell(1,num_units);
 
 %---Sequence Spike-Eye Crosscorrelation Analysis---%
 seq_spike_eye_xc_observed_xc = cell(1,num_units);
 seq_spike_eye_xc_observed_max_xc = NaN(1,num_units);
 seq_spike_eye_xc_observed_FFT = cell(1,num_units);
-seq_spike_eye_xc_shuffled_xc = cell(1,num_units);
-seq_spike_eye_xc_shuffled_max_xc = cell(1,num_units);
-seq_spike_eye_xc_shuffled_FFT = cell(1,num_units);
-seq_spike_eye_xc_shuffled_FFT_99 = cell(1,num_units);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %---Get Sequence Task Successful Trial Info---%
@@ -186,9 +186,16 @@ seq_cfg.trl = seq_cfg.trl(successful_sequence_trials);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Grab Eye and Spike Times for Both Tasks---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 for unit =1:num_units
     if all(isnan(valid_trials(:,unit)))
         continue %no data for this neuron
+    end
+    
+    whole_spike_times{unit} = cell2mat(data(unit).values(valid_trials(1,unit):valid_trials(2,unit)));
+    whole_spike_count(unit)= sum(whole_spike_times{unit});
+    if whole_spike_count(unit) < min_spike_count %oo few spikes
+        continue
     end
     
     %---List Image Task---%
@@ -270,8 +277,6 @@ for unit =1:num_units
             seq_eye_times{unit}(trial,:) = temp_eye;
         end
     end
-    
-    
 end
 %---Remove Excess NaNs---%
 list_spike_times = laundry(list_spike_times);
@@ -288,6 +293,7 @@ for unit = 1:num_units
         list_spike_count = sum(list_spike_times{unit}(:));
         seq_spike_count = sum(seq_spike_times{unit}(:));
         
+        %---List Image Period Only---%
         if list_spike_count > min_spike_count %at least ~100 spikes
             [list_spike_ac_observed_ac{unit},list_spike_ac_observed_FFT{unit}] = ...
                 calculate_trial_averaged_ac(list_spike_times{unit},twin,NFFT,freq_filt);
@@ -297,6 +303,8 @@ for unit = 1:num_units
                 list_spike_eye_xc_observed_max_xc(unit)] =calculate_trial_averaged_xc...
                 (list_spike_times{unit},list_eye_times{unit},twin,NFFT,freq_filt);
         end
+        
+        %---Sequence Trial Period Only---%
         if seq_spike_count > min_spike_count %at least ~100 spikes
             [seq_spike_ac_observed_ac{unit},seq_spike_ac_observed_FFT{unit}] = ...
                 calculate_trial_averaged_ac(seq_spike_times{unit},twin,NFFT,freq_filt);
@@ -306,827 +314,273 @@ for unit = 1:num_units
                 seq_spike_eye_xc_observed_max_xc(unit)] =calculate_trial_averaged_xc...
                 (seq_spike_times{unit},seq_eye_times{unit},twin,NFFT,freq_filt);
         end
+        
+        %---Whole Session---%
+        if whole_spike_count(unit) > min_spike_count
+            [whole_spike_ac_observed_ac{unit}, whole_spike_ac_observed_FFT{unit}] =...
+                calculate_whole_ac(whole_spike_times{unit},twin,NFFT,freq_filt,freq_filt2);
+        end
     end
 end
-
+%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Calculate Shuffled Values---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-f100 = find(f2 >= 100);
-f100 = f100(1);
-f450 = find(f2 >= 450);
-f450 = f450(1);
-Hz4 = round(4/mode(diff(f2)));%peaks with minimum distance of 4 Hz away
-
 for unit = 1:num_units
-    if ~isempty(list_spike_ac_observed_ac{unit})
-        
-        %Spike AutoCorrelation
-        list_spike_ac_freq_of_interest{unit} = find_frequencies_of_interest(...
-            list_spike_ac_observed_FFT{unit},whitening_filter,f2,f100,f450,Hz4);
-        for freq = 1:length(list_spike_ac_freq_of_interest{unit})
-            [list_spike_shuffled_ac{freq,unit},list_spike_ac_shuffled_FFT{freq,unit}]...
-                = jitter_window_shuffling(PSD_numshuffs,list_spike_times{unit},NFFT,twin,...
-                1,freq_filt,list_spike_ac_freq_of_interest{unit}(freq),smFreqVal);
-            list_spike_ac_shuffled_FFT_99{freq,unit} = prctile(list_spike_ac_shuffled_FFT{freq,unit},99,1);
+    if whole_spike_count(unit) > min_spike_count
+        whole_spike_ac_significant_freq{unit} = NaN(2,5);
+        last_loc = 0;
+        for freq = 1:length(lower_bound_frequencies)
+            if freq == 1%lowest frequency band may need whitening
+                %frequencies = f2(lower_bound_frequencies_ind(freq)-Hz1:lower_bound_frequencies_ind(freq+1)+Hz1);
+                PSD =  whole_spike_ac_observed_FFT{unit}(1,lower_bound_frequencies_ind(freq)-Hz1:lower_bound_frequencies_ind(freq+1)+Hz1);
+                %PSD = PSD.*frequencies;%whiten ~1/f, really only for lower frequencies
+                [pks,locs] = findpeaks(PSD,'MinPeakDistance',Hz4);
+                pks(locs < Hz1) = [];
+                locs(locs < Hz1) = [];%before band of interest
+                pks(locs < last_loc) = [];%too close to last loc
+                locs(locs < last_loc) = [];%too close to last loc
+                pks(locs > length(PSD)-Hz1) = []; %after band of interest
+                locs(locs > length(PSD)-Hz1) = []; %after band of interest
+                if isempty(locs)%no peaks don't even run
+                    continue
+                else
+%                     real_locs = NaN(1,length(locs));
+%                     PSD =  whole_spike_ac_observed_FFT{unit}(1,lower_bound_frequencies_ind(freq)-Hz1:lower_bound_frequencies_ind(freq+1)+Hz1);
+%                     for lc = 1:length(locs)%since whitened need to correct for shifted peak
+%                         [~,maxind] = max(PSD(locs(lc)-2*Hz1:locs(lc)+2*Hz1));
+%                         real_locs(lc) = lower_bound_frequencies_ind(freq)+maxind-1;
+%                     end
+                    [shuffled_ac,shuffled_FFT]...
+                        = whole_jitter_window_shuffling(PSD_numshuffs,whole_spike_times{unit},...
+                        NFFT,twin,freq_filt,lower_bound_frequencies(freq),smFreqVal);
+                end
+            elseif freq == 5 %highest frequency band with larger smoothing window
+                PSD =  whole_spike_ac_observed_FFT{unit}(2,lower_bound_frequencies_ind(freq):Hz400);
+                [pks,locs] = findpeaks(PSD,'MinPeakDistance',Hz4);
+                pks(locs < last_loc) = [];%too close to last loc
+                locs(locs < last_loc) = [];%too close to last loc
+                if isempty(locs)%no peaks don't even run
+                    continue
+                else
+                    [shuffled_ac,shuffled_FFT]...
+                        = whole_jitter_window_shuffling(PSD_numshuffs,whole_spike_times{unit},...
+                        NFFT,twin,freq_filt,lower_bound_frequencies(freq),smFreqVal);
+                end
+                
+            else
+                PSD =  whole_spike_ac_observed_FFT{unit}(1,lower_bound_frequencies_ind(freq)-Hz1:lower_bound_frequencies_ind(freq+1)+Hz1);
+                [pks,locs] = findpeaks(PSD,'MinPeakDistance',Hz4);
+                pks(locs < Hz1) = [];
+                locs(locs < Hz1) = [];%before band of interest
+                pks(locs < last_loc) = [];%too close to last loc
+                locs(locs < last_loc) = [];%too close to last loc
+                pks(locs > length(PSD)-Hz1) = []; %after band of interest
+                locs(locs > length(PSD)-Hz1) = []; %after band of interest
+                if isempty(locs)%no peaks don't even run
+                    continue
+                else
+                    [shuffled_ac,shuffled_FFT]...
+                        = whole_jitter_window_shuffling(PSD_numshuffs,whole_spike_times{unit},...
+                        NFFT,twin,freq_filt,lower_bound_frequencies(freq),smFreqVal);
+                end
+            end
+            
+            whole_spike_ac_shuffled_ac_mean{unit,freq} = mean(shuffled_ac);
+            whole_spike_ac_shuffled_FFT_99{unit,freq} = prctile(shuffled_FFT,99,1);
+            
+            if length(locs) > 1
+                %take largest peak
+                [~,sp] = sort(pks);
+                locs = locs(sp);
+                locs = locs(end);
+            end
+            last_loc = locs-(length(PSD)-2*Hz1)+Hz4;
+            if freq == 5
+                freq_ind = locs+lower_bound_frequencies_ind(freq)-1;
+                cluster_observed_FFT = sum(whole_spike_ac_observed_FFT{unit}(2,freq_ind-Hz1:freq_ind+Hz1),2);
+            else
+                freq_ind = locs+lower_bound_frequencies_ind(freq)-Hz1-1;
+                cluster_observed_FFT = sum(whole_spike_ac_observed_FFT{unit}(1,freq_ind-Hz1:freq_ind+Hz1),2);
+                
+            end
+            
+            cluster_shuffled_FFT = sum(shuffled_FFT(:,freq_ind-Hz1:freq_ind+Hz1),2);
+            if 100*sum(cluster_observed_FFT > cluster_shuffled_FFT)/PSD_numshuffs > pthresh
+                whole_spike_ac_significant_freq{unit}(:,freq) = [f2(freq_ind),1];
+            else
+                whole_spike_ac_significant_freq{unit}(:,freq) = [f2(freq_ind),0];
+            end
+            
         end
-        
-        %Eye AutoCorrelation
-        list_eye_ac_freq_of_interest{unit} = find_frequencies_of_interest_eye(...
-            list_eye_ac_observed_FFT{unit},f2,f100,Hz4);
-        for freq = 1:length(list_eye_ac_freq_of_interest{unit})
-            [list_eye_shuffled_ac{freq,unit},list_eye_ac_shuffled_FFT{freq,unit}]...
-                = jitter_window_shuffling(PSD_numshuffs,list_eye_times{unit},NFFT,twin,...
-                1,freq_filt,list_eye_ac_freq_of_interest{unit}(freq),smFreqVal);
-            list_eye_ac_shuffled_FFT_99{freq,unit} = prctile(list_eye_ac_shuffled_FFT{freq,unit},99,1);
-        end
-        
-        
-        %Spike/Eye Cross Correlation
-        [list_spike_eye_xc_shuffled_xc{unit},list_spike_eye_xc_shuffled_FFT{unit},...
-            list_spike_eye_xc_shuffled_max_xc{unit}] = shuffle_cross_correlation(...
-            list_spike_times{unit},list_eye_times{unit},twin,NFFT,freq_filt,xc_PSD_numshuffs);
-        list_spike_eye_xc_shuffled_FFT_99{unit} = ...
-            prctile(list_spike_eye_xc_shuffled_FFT{unit},95,1);
-    end
-    if ~isempty(seq_spike_ac_observed_ac{unit})
-        
-        %Spike AutoCorrelation
-        seq_spike_ac_freq_of_interest{unit} = find_frequencies_of_interest(...
-            seq_spike_ac_observed_FFT{unit},whitening_filter,f2,f100,f450,Hz4);
-        for freq = 1:length(seq_spike_ac_freq_of_interest{unit})
-            [seq_spike_shuffled_ac{freq,unit},seq_spike_ac_shuffled_FFT{freq,unit}]...
-                = jitter_window_shuffling(PSD_numshuffs,seq_spike_times{unit},NFFT,twin,...
-                1,freq_filt,seq_spike_ac_freq_of_interest{unit}(freq),smFreqVal);
-            seq_spike_ac_shuffled_FFT_99{freq,unit} = prctile(seq_spike_ac_shuffled_FFT{freq,unit},99,1);
-        end
-        
-        %Eye AutoCorrelation
-        seq_eye_ac_freq_of_interest{unit} = find_frequencies_of_interest_eye(...
-            seq_eye_ac_observed_FFT{unit},f2,f100,Hz4);
-        for freq = 1:length(seq_eye_ac_freq_of_interest{unit})
-            [seq_eye_shuffled_ac{freq,unit},seq_eye_ac_shuffled_FFT{freq,unit}]...
-                = jitter_window_shuffling(PSD_numshuffs,seq_eye_times{unit},NFFT,twin,...
-                1,freq_filt,seq_eye_ac_freq_of_interest{unit}(freq),smFreqVal);
-            seq_eye_ac_shuffled_FFT_99{freq,unit} = prctile(seq_eye_ac_shuffled_FFT{freq,unit},99,1);
-        end
-        
-        
-        %Spike/Eye Cross Correlation
-        [seq_spike_eye_xc_shuffled_xc{unit},seq_spike_eye_xc_shuffled_FFT{unit},...
-            seq_spike_eye_xc_shuffled_max_xc{unit}] = shuffle_cross_correlation(...
-            seq_spike_times{unit},seq_eye_times{unit},twin,NFFT,freq_filt,xc_PSD_numshuffs);
-        seq_spike_eye_xc_shuffled_FFT_99{unit} = ...
-            prctile(seq_spike_eye_xc_shuffled_FFT{unit},95,1);
     end
 end
 
+%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Plot all of the Results---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
+freq_titles = {'Theta Range','Alpha Range','Beta Range','Gamma Range','HFO/Burst Range'};
+xlimits = [3 11;9 21;19 31; 30 100;100 400];
+clrs = lines(5);
 for unit = 1:num_units
-    if isempty(list_spike_times{unit})
+    if whole_spike_count(unit) < min_spike_count
         continue
     end
-    %%
-    %---Plot Spike AutoCorrelation Results---%
-    %for list
-    if ~isempty(list_spike_shuffled_ac{1,unit})
-        figure
-        subplot(2,3,1)
-        hold on
-        for freq = 5:-1:1
-            dofill(tm,list_spike_shuffled_ac{freq,unit},clrs(freq),1,20);
-        end
-        dofill(tm,list_spike_ac_observed_ac{unit},'k',1,20);
-        hold off
-        xlim([-twin twin])
-        set(gca,'Xtick',[-500 -250 0 250 500])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('Spike AutoCorr, 10 ms smooth')
-        
-        subplot(2,3,4)
-        hold on
-        for freq = 5:-1:1
-            dofill(tm,list_spike_shuffled_ac{freq,unit},clrs(freq),1,4);
-        end
-        dofill(tm,list_spike_ac_observed_ac{unit},'k',1,4);
-        hold off
-        xlim([-25 25])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('Spike AutoCorr, 2 ms smooth')
-        
-        subplot(2,3,2)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,list_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([0 12])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Delta/Theta Range')
-        
-        subplot(2,3,3)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,list_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([8 30])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Alpha/Beta Range')
-        
-        subplot(2,3,5)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,list_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([30 100])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Gamma Range')
-        
-        subplot(2,3,6)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,list_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([100 450])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('HFO/Burst Range')
-        
-        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_List_Spike_AutoCorr_analysis'])
-    end
-    
-    %for Sequence
-    if ~isempty(seq_spike_shuffled_ac{1,unit})
-        
-        figure
-        subplot(2,3,1)
-        hold on
-        for freq = 5:-1:1
-            dofill(tm,seq_spike_shuffled_ac{freq,unit},clrs(freq),1,20);
-        end
-        dofill(tm,seq_spike_ac_observed_ac{unit},'k',1,20);
-        hold off
-        xlim([-twin twin])
-        set(gca,'Xtick',[-500 -250 0 250 500])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('Spike AutoCorr, 10 ms smooth')
-        
-        subplot(2,3,4)
-        hold on
-        for freq = 5:-1:1
-            dofill(tm,seq_spike_shuffled_ac{freq,unit},clrs(freq),1,4);
-        end
-        dofill(tm,seq_spike_ac_observed_ac{unit},'k',1,4);
-        hold off
-        xlim([-25 25])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('Spike AutoCorr, 2 ms smooth')
-        
-        subplot(2,3,2)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,seq_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([0 12])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Delta/Theta Range')
-        
-        subplot(2,3,3)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,seq_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([8 30])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Alpha/Beta Range')
-        
-        subplot(2,3,5)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,seq_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([30 100])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Gamma Range')
-        
-        subplot(2,3,6)
-        hold on
-        for freq = 5:-1:1
-            plot(f2,seq_spike_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_spike_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_spike_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_spike_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([100 450])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('HFO/Burst Range')
-        
-        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Sequence_Spike_AutoCorr_analysis'])
-    end
-    %%
-    %---Plot eye AutoCorrelation Results---%
-    if ~isempty(list_eye_shuffled_ac{1,unit})
-        %for list
-        figure
-        subplot(2,3,1)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            dofill(tm,list_eye_shuffled_ac{freq,unit},clrs(freq),1,20);
-        end
-        dofill(tm,list_eye_ac_observed_ac{unit},'k',1,20);
-        hold off
-        xlim([-twin twin])
-        set(gca,'Xtick',[-500 -250 0 250 500])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('eye AutoCorr, 10 ms smooth')
-        
-        subplot(2,3,4)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            dofill(tm,list_eye_shuffled_ac{freq,unit},clrs(freq),1,4);
-        end
-        dofill(tm,list_eye_ac_observed_ac{unit},'k',1,4);
-        hold off
-        xlim([-25 25])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('eye AutoCorr, 2 ms smooth')
-        
-        subplot(2,3,2)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,list_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([0 12])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Delta/Theta Range')
-        
-        subplot(2,3,3)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,list_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([8 30])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Alpha/Beta Range')
-        
-        subplot(2,3,5)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,list_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([30 100])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Gamma Range')
-        
-        subplot(2,3,6)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,list_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == list_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),list_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,list_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([100 450])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('HFO/Burst Range')
-        
-        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_List_eye_AutoCorr_analysis'])
-    end
-    
-    %for Sequence
-    if ~isempty(seq_eye_shuffled_ac{1,unit})
-        
-        figure
-        subplot(2,3,1)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            dofill(tm,seq_eye_shuffled_ac{freq,unit},clrs(freq),1,20);
-        end
-        dofill(tm,seq_eye_ac_observed_ac{unit},'k',1,20);
-        hold off
-        xlim([-twin twin])
-        set(gca,'Xtick',[-500 -250 0 250 500])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('eye AutoCorr, 10 ms smooth')
-        
-        subplot(2,3,4)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            dofill(tm,seq_eye_shuffled_ac{freq,unit},clrs(freq),1,4);
-        end
-        dofill(tm,seq_eye_ac_observed_ac{unit},'k',1,4);
-        hold off
-        xlim([-25 25])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('eye AutoCorr, 2 ms smooth')
-        
-        subplot(2,3,2)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,seq_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([0 12])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Delta/Theta Range')
-        
-        subplot(2,3,3)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,seq_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([8 30])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Alpha/Beta Range')
-        
-        subplot(2,3,5)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,seq_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([30 100])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Gamma Range')
-        
-        subplot(2,3,6)
-        hold on
-        for freq = length(list_eye_ac_freq_of_interest{unit}):-1:1
-            plot(f2,seq_eye_ac_shuffled_FFT_99{freq,unit},clrs(freq));
-            freq_ind = find(f2 == seq_eye_ac_freq_of_interest{unit}(freq));
-            plot(f2(freq_ind),seq_eye_ac_observed_FFT{unit}(freq_ind),[clrs(freq) 'o'],'markersize',5)
-        end
-        plot(f2,seq_eye_ac_observed_FFT{unit},'k')
-        hold off
-        xlim([100 450])
-        yl = ylim;
-        ylim([0 yl(2)])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('HFO/Burst Range')
-        
-        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Sequence_eye_AutoCorr_analysis'])
-    end
-    %%
-    %---Plot Spike/Eye Cross Correlation Results---%
-    if ~isempty(list_spike_eye_xc_shuffled_xc{unit})
-        %for list first
-        figure
-        subplot(2,3,1)
-        dofill(tm,list_spike_eye_xc_shuffled_xc{unit},'red',1,20);
-        hold on
-        dofill(tm,list_spike_eye_xc_observed_xc{unit},'black',1,20);
-        hold off
-        xlim([-twin twin])
-        set(gca,'Xtick',[-500 -250 0 250 500])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('Spike/Eye XC')
-        
-        subplot(2,3,4)
-        hist(list_spike_eye_xc_shuffled_max_xc{unit},25)
-        yl = ylim;
-        hold on
-        plot([list_spike_eye_xc_observed_max_xc(unit) list_spike_eye_xc_observed_max_xc(unit)],...
-            [yl(1) yl(2)],'g')
-        hold off
-        box off
-        xlabel('Maximum Correlation')
-        ylabel('Count')
-        corr_pct = 100*sum(list_spike_eye_xc_observed_max_xc(unit) > ...
-            list_spike_eye_xc_shuffled_max_xc{unit})/xc_PSD_numshuffs;
-        title(['Corr. Percentile: ' num2str(corr_pct,3)])
-        
-        subplot(2,3,2)
-        plot(f2,list_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,list_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([0 12])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Delta/Theta Range')
-        
-        subplot(2,3,3)
-        plot(f2,list_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,list_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([8 30])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Alpha/Beta Range')
-        
-        subplot(2,3,5)
-        plot(f2,list_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,list_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([30 100])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Gamma Range')
-        
-        subplot(2,3,6)
-        plot(f2,list_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,list_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([100 450])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('HFO/Burst Range')
-        
-        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_List_Eye_Spike_XC_analysis'])
-    end
-    
-    %for sequence second
-    if ~isempty(seq_spike_eye_xc_shuffled_xc{unit})
-        
-        figure
-        subplot(2,3,1)
-        dofill(tm,seq_spike_eye_xc_shuffled_xc{unit},'red',1,20);
-        hold on
-        dofill(tm,seq_spike_eye_xc_observed_xc{unit},'black',1,20);
-        hold off
-        xlim([-twin twin])
-        set(gca,'Xtick',[-500 -250 0 250 500])
-        ylabel('Correlation (a.u.)')
-        xlabel('lag (ms)')
-        title('Spike/Eye XC')
-        
-        subplot(2,3,4)
-        hist(seq_spike_eye_xc_shuffled_max_xc{unit},25)
-        yl = ylim;
-        hold on
-        plot([seq_spike_eye_xc_observed_max_xc(unit) seq_spike_eye_xc_observed_max_xc(unit)],...
-            [yl(1) yl(2)],'g')
-        hold off
-        box off
-        xlabel('Maximum Correlation')
-        ylabel('Count')
-        corr_pct = 100*sum(seq_spike_eye_xc_observed_max_xc(unit) > ...
-            seq_spike_eye_xc_shuffled_max_xc{unit})/xc_PSD_numshuffs;
-        title(['Corr. Percentile: ' num2str(corr_pct,3)])
-        
-        subplot(2,3,2)
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,seq_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([0 12])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Delta/Theta Range')
-        
-        subplot(2,3,3)
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,seq_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([8 30])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Alpha/Beta Range')
-        
-        subplot(2,3,5)
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,seq_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([30 100])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('Gamma Range')
-        
-        subplot(2,3,6)
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit},'k');
-        hold on
-        plot(f2,seq_spike_eye_xc_shuffled_FFT_99{unit},'r');
-        hold off
-        xlim([100 450])
-        xlabel('Frequency (Hz')
-        ylabel('Relative Power')
-        box off
-        title('HFO/Burst Range')
-        
-        save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Sequence_Eye_Spike_XC_analysis'])
-    end
     
     
-    %---Plot Auto/Cross-Correlations Under Different Conditions---%
-    list_spike_count = sum(list_spike_times{unit}(:));
-    seq_spike_count = sum(seq_spike_times{unit}(:));
-
+    %---Plot All Observed AutoCorrelations---%
     figure
+    %spike autocorrelation
     subplot(2,3,1)
+    leg = [];
     hold on
-    if list_spike_count > min_spike_count
-        dofill(tm,list_eye_ac_observed_ac{unit},'red',1,20);
+    if ~isempty(list_spike_ac_observed_ac{unit})
+        dofill(tm,list_spike_ac_observed_ac{unit}-mean(list_spike_ac_observed_ac{unit}(:)),'r',1,20);
+        leg = {'Images'};
     end
-    if seq_spike_count > min_spike_count
-        dofill(tm,seq_eye_ac_observed_ac{unit},'blue',1,20);
+    if ~isempty(seq_spike_ac_observed_ac{unit})
+        dofill(tm,seq_spike_ac_observed_ac{unit}-mean(seq_spike_ac_observed_ac{unit}(:)),'b',1,20);
+        leg = [leg {'Sequence'}];
     end
-    hold off
-    yl  = ylim;
-    ylim([0 yl(2)])
-    xlim([-twin twin])
-    set(gca,'Xtick',[-500 -250 0 250 500])
-    ylabel('Correlation (a.u.)')
-    xlabel('lag (ms)')
-    legend('List','Seq','Location','NorthWest')
-    title('Eye Movement Autocorrelation')
-    
-    subplot(2,3,4)
-    hold on
-    if list_spike_count > min_spike_count
-        dofill(tm,list_spike_ac_observed_ac{unit},'green',1,20);
-    end
-    if seq_spike_count > min_spike_count
-        dofill(tm,seq_spike_ac_observed_ac{unit},'black',1,20);
-    end
-    hold off
-    yl  = ylim;
-    ylim([0 yl(2)])
-    xlim([-twin twin])
-    set(gca,'Xtick',[-500 -250 0 250 500])
-    ylabel('Correlation (a.u.)')
-    legend('List','Seq','Location','SouthWest')
-    title('Spike Autocorrelation')
-    
-    
-    subplot(2,3,2)
-    hold on
-    if list_spike_count > min_spike_count
-        dofill(tm,list_spike_eye_xc_observed_xc{unit},'cyan',1,20);
-    end
-    if seq_spike_count > min_spike_count
-        dofill(tm,seq_spike_eye_xc_observed_xc{unit},'magenta',1,20);
-    end
+    dofill(tm,whole_spike_ac_observed_ac{unit},'k',1,20);
     hold off
     xlim([-twin twin])
     set(gca,'Xtick',[-500 -250 0 250 500])
     ylabel('Correlation (a.u.)')
     xlabel('lag (ms)')
-    legend('List','Seq')
-    title('Spike Autocorrelation')
-    xlabel('lag (ms)')
-    legend('List','Seq','Location','SouthWest')
-    title('Spike/Eye Crosscorrelation')
+    title('Spike AutoCorrelation, 10 ms smooth')
+    legend([leg,'Whole'])
+    %
+    %     %spike x eye cross correlation
+    %     subplot(2,3,4)
+    %     hold on
+    %     leg = [];
+    %     if ~isempty(list_spike_ac_observed_ac{unit})
+    %         dofill(tm,list_spike_eye_xc_observed_xc{unit},'g',1,20);
+    %         leg = {'Images'};
+    %     end
+    %     if ~isempty(seq_spike_ac_observed_ac{unit})
+    %         dofill(tm,seq_spike_eye_xc_observed_xc{unit},'m',1,20);
+    %         leg = [leg {'Sequence'}];
+    %     end
+    %     hold off
+    %     xlim([-twin twin])
+    %     set(gca,'Xtick',[-500 -250 0 250 500])
+    %     ylabel('Correlation (a.u.)')
+    %     xlabel('lag (ms)')
+    %     title('Spike/Eye CrossCorrelation, 10 ms smooth')
+    %     legend(leg)
     
-    subplot(2,3,3)
-    hold on
-    if list_spike_count > min_spike_count
-        plot(f2,list_spike_ac_observed_FFT{unit}/mean(list_spike_ac_observed_FFT{unit}),'green');
-        plot(f2,list_eye_ac_observed_FFT{unit}/mean(list_eye_ac_observed_FFT{unit}),'red');
-        plot(f2,list_spike_eye_xc_observed_FFT{unit}/mean(list_spike_eye_xc_observed_FFT{unit}),'cyan');
+    for sb = 2:6
+        subplot(2,3,sb)
+        hold on
+        if ~isempty(list_spike_ac_observed_ac{unit})
+            %plot(f2,list_spike_eye_xc_observed_FFT{unit},'g');%has too much power
+            plot(f2,list_spike_ac_observed_FFT{unit},'r');
+        end
+        if ~isempty(seq_spike_ac_observed_ac{unit})
+            %plot(f2,seq_spike_eye_xc_observed_FFT{unit},'m');%has too much power
+            plot(f2,seq_spike_ac_observed_FFT{unit},'b');
+        end
+        if sb == 6
+            plot(f2,whole_spike_ac_observed_FFT{unit}(2,:),'k')
+        else
+            plot(f2,whole_spike_ac_observed_FFT{unit}(1,:),'k')
+        end
+        xlim([xlimits(sb-1,1) xlimits(sb-1,2)])
+        yl = ylim;
+        ylim([0 yl(2)])
+        xlabel('Frequency (Hz')
+        ylabel('Relative Power')
+        box off
+        hold off
+        title(freq_titles(freq))
+        
     end
-    if seq_spike_count > min_spike_count
-        plot(f2,seq_spike_ac_observed_FFT{unit}/mean(seq_spike_ac_observed_FFT{unit}),'black');
-        plot(f2,seq_eye_ac_observed_FFT{unit}/mean(seq_eye_ac_observed_FFT{unit}),'blue');
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit}/mean(seq_spike_eye_xc_observed_FFT{unit}),'magenta');
-    end
-    hold off
-    xlim([0 12])
-    ylabel('Relative Power')
-    xlabel('Frequency')
-    legend('List Spike','List Eye','List Spike/Eye','Seq Spike','Seq Eye','Seq Spike/Eye')
+    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Observed_AutoCorrelations'])
+    %%
+%     figure
+%     subplot(2,3,1)
+%     hold on
+%     for freq = 1:5
+%         if  ~isnan(whole_spike_ac_significant_freq{unit}(1,freq))
+%             dofill(tm,whole_spike_ac_shuffled_ac_mean{unit,freq},clrs(freq,:),1,20);
+%         end
+%     end
+%     dofill(tm,whole_spike_ac_observed_ac{unit},'k',1,20);
+%     hold off
+%     xlim([-twin twin])
+%     set(gca,'Xtick',[-500 -250 0 250 500])
+%     ylabel('Correlation (a.u.)')
+%     xlabel('lag (ms)')
+%     title('Spike AutoCorrelation, 10 ms smooth')
+%  
+%     for sb = 2:6
+%         subplot(2,3,sb)
+%         %for freq = 1:5
+%         freq = sb-1;
+%         if  ~isnan(whole_spike_ac_significant_freq{unit}(1,freq))
+%             p = plot(f2,whole_spike_ac_shuffled_FFT_99{unit,freq});
+%             set(p,'color',clrs(freq,:))
+%             hold on
+%             freq_ind = find(f2 == whole_spike_ac_significant_freq{unit}(1,freq));
+%             if freq == 5
+%                 pow = whole_spike_ac_observed_FFT{unit}(2,freq_ind);
+%             else
+%                 pow = whole_spike_ac_observed_FFT{unit}(1,freq_ind);
+%             end
+%             if whole_spike_ac_significant_freq{unit}(2,freq) == 1%significant
+%                 plot(f2(freq_ind),pow,['rx'],'Markersize',15)
+%             else
+%                 plot(f2(freq_ind),pow,['ro'],'Markersize',15)
+%             end
+%         end
+%         %end
+%         
+%         if sb == 6
+%             plot(f2,whole_spike_ac_observed_FFT{unit}(2,:),'k','linewidth',3)
+%         else
+%             plot(f2,whole_spike_ac_observed_FFT{unit}(1,:),'k','linewidth',3)
+%         end
+%         xlim([xlimits(freq,1) xlimits(freq,2)])
+%         yl = ylim;
+%         ylim([0 yl(2)])
+%         xlabel('Frequency (Hz)')
+%         ylabel('Relative Power')
+%         box off
+%         hold off
+%         
+%         if whole_spike_ac_significant_freq{unit}(2,freq) == 1%significant
+%              freq_ind = find(f2 == whole_spike_ac_significant_freq{unit}(1,freq));
+%             title(sprintf([freq_titles{freq} ', peak @ ' num2str(f2(freq_ind),3) ' Hz']))
+%         else
+%             title(freq_titles{freq})
+%         end
+%     end
+% 
+%     %%
+%    
+%     save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Whole_AutoCorrelations_Analysis'])
     
-    subplot(2,3,5)
-    hold on
-    if list_spike_count > min_spike_count
-        plot(f2,list_spike_ac_observed_FFT{unit}/mean(list_spike_ac_observed_FFT{unit}),'green');
-        plot(f2,list_eye_ac_observed_FFT{unit}/mean(list_eye_ac_observed_FFT{unit}),'red');
-        plot(f2,list_spike_eye_xc_observed_FFT{unit}/mean(list_spike_eye_xc_observed_FFT{unit}),'cyan');
-    end
-    if seq_spike_count > min_spike_count
-        plot(f2,seq_spike_ac_observed_FFT{unit}/mean(seq_spike_ac_observed_FFT{unit}),'black');
-        plot(f2,seq_eye_ac_observed_FFT{unit}/mean(seq_eye_ac_observed_FFT{unit}),'blue');
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit}/mean(seq_spike_eye_xc_observed_FFT{unit}),'magenta');
-    end
-    hold off
-    xlim([8 30])
-    ylabel('Relative Power')
-    xlabel('Frequency')
-    
-    subplot(2,3,6)
-    hold on
-    if list_spike_count > min_spike_count
-        plot(f2,list_spike_ac_observed_FFT{unit}/mean(list_spike_ac_observed_FFT{unit}),'green');
-        plot(f2,list_eye_ac_observed_FFT{unit}/mean(list_eye_ac_observed_FFT{unit}),'red');
-        plot(f2,list_spike_eye_xc_observed_FFT{unit}/mean(list_spike_eye_xc_observed_FFT{unit}),'cyan');
-    end
-    if seq_spike_count > min_spike_count
-        plot(f2,seq_spike_ac_observed_FFT{unit}/mean(seq_spike_ac_observed_FFT{unit}),'black');
-        plot(f2,seq_eye_ac_observed_FFT{unit}/mean(seq_eye_ac_observed_FFT{unit}),'blue');
-        plot(f2,seq_spike_eye_xc_observed_FFT{unit}/mean(seq_spike_eye_xc_observed_FFT{unit}),'magenta');
-    end
-    hold off
-    xlim([30 100])
-    ylabel('Relative Power')
-    xlabel('Frequency')
-    
-    save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_all_observed_freq_modulation'])
 end
-
 %%
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Save all of the Results---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% save([data_dir task_file(1:8) '-Freq_Mod_Analysis.mat'],...
+%     'twin','smFreqVal','smFreqVal','NFFT','f2','min_spike_count','PSD_numshuffs','unit_stats',...
+%     'spatial_info','pthresh','lower_bound_frequencies','lower_bound_frequencies_ind',...
+%     'freq_filt','freq_filt2','whole_spike_times','whole_spike_count','whole_spike_ac_observed_ac',...
+%     'whole_spike_ac_observed_FFT','whole_spike_ac_shuffled_ac_mean','whole_spike_ac_shuffled_FFT_99',...
+%     'whole_spike_ac_significant_freq','list_spike_times','list_spike_ac_observed_ac',...
+%     'list_spike_ac_observed_FFT','seq_spike_times','seq_spike_ac_observed_ac',...
+%     'seq_spike_ac_observed_FFT','list_eye_times','list_eye_ac_observed_ac',...
+%     'list_eye_ac_observed_FFT','seq_eye_times','seq_eye_ac_observed_ac',...
+%     'seq_eye_ac_observed_FFT','list_spike_eye_xc_observed_xc','list_spike_eye_xc_observed_max_xc',...
+%     'list_spike_eye_xc_observed_FFT','seq_spike_eye_xc_observed_xc',...
+%     'seq_spike_eye_xc_observed_max_xc','seq_spike_eye_xc_observed_FFT',...
+%     'Hz1','Hz4','Hz400');
 %%
-save([data_dir task_file(1:8) '-Freq_Mod_Analysis.mat'],...
-    'twin','smFreqVal','NFFT','f2','min_spike_count','PSD_numshuffs',...
-    'xc_PSD_numshuffs','unit_stats','spatial_info','list_spike_times',...
-    'list_eye_times','seq_spike_times','seq_eye_times','whitening_filter',...
-'list_spike_times','list_spike_ac_observed_ac','list_spike_ac_observed_FFT',...
-'list_spike_shuffled_ac','list_spike_ac_shuffled_FFT_99','list_spike_ac_freq_of_interest',...
-'seq_spike_times','seq_spike_ac_observed_ac','seq_spike_ac_observed_FFT',...
-'seq_spike_shuffled_ac','seq_spike_ac_shuffled_FFT_99','seq_spike_ac_freq_of_interest',...
-'list_eye_times','list_eye_ac_observed_ac','list_eye_ac_observed_FFT',...
-'list_eye_shuffled_ac','list_eye_ac_shuffled_FFT_99','list_eye_ac_freq_of_interest',...
-'seq_eye_times','seq_eye_ac_observed_ac','seq_eye_ac_observed_FFT',...
-'seq_eye_shuffled_ac','seq_eye_ac_shuffled_FFT_99','seq_eye_ac_freq_of_interest',...
-'list_spike_eye_xc_observed_xc','list_spike_eye_xc_observed_max_xc',...
-'list_spike_eye_xc_observed_FFT','list_spike_eye_xc_shuffled_xc',...
-'list_spike_eye_xc_shuffled_max_xc','list_spike_eye_xc_shuffled_FFT_99',...
-'seq_spike_eye_xc_observed_xc','seq_spike_eye_xc_observed_max_xc',...
-'seq_spike_eye_xc_observed_FFT','seq_spike_eye_xc_shuffled_xc',...
-'seq_spike_eye_xc_shuffled_max_xc','seq_spike_eye_xc_shuffled_FFT_99');
-%%
-end
-
-function FOI = find_frequencies_of_interest(PSD,whitened_PSD,f2,f100,f450,Hz4)
-FOI= NaN(1,5);%frequencies of interest
-[~,maxi] = max(PSD(1:f100));%orignal max below 100 Hz
-FOI(1) = f2(maxi);
-[~,maxi] = max(PSD(f100:f450));%max power from 100-450 Hz
-FOI(5) = f2(maxi)+f2(f100);
-whitened_PSD = PSD./whitened_PSD;
-[pks,locs] = findpeaks(whitened_PSD(1:f100),'MinPeakDistance',Hz4);
-pks(locs < Hz4/4) = [];%remove peaks less than 1 Hz
-locs(locs < Hz4/4) = [];%remove peaks less than 1 Hz
-[~,is] = sort(pks);%sort peaks by magnitude
-locs = locs(is);%sort locs by peak
-locs = locs(end-2:end);%take 3 largest peaks
-FOI(2:4)= f2(locs);
-
-%whitening shifts observed peaks
-real_peak = NaN(1,5);
-real_peak(1) = FOI(1);
-real_peak(5) = FOI(5);
-for freq = 2:4
-    fmin = find(f2 <= FOI(freq)-1/(.05*FOI(freq)));%scale window to 1/frequency
-    if isempty(fmin)
-        fmin = 1;
-    end
-    fmin = fmin(end);
-    fmax = find(f2 >= FOI(freq)+1/(.05*FOI(freq)));%scale window to 1/frequency
-    fmax = fmax(1);
-    [~,maxind] = max(PSD(fmin:fmax));
-    real_peak(freq) = fmin+maxind-1;
-end
-real_peak(2:4) = f2(real_peak(2:4));
-FOI = sort(real_peak);
-end
-
-function FOI = find_frequencies_of_interest_eye(PSD,f2,f100,Hz4)
-[pks,locs] = findpeaks(PSD(1:f100),'MinPeakDistance',Hz4/2);%at least 2 Hz apart
-pks(locs < Hz4/4) = [];%remove peaks less than 1 Hz
-locs(locs < Hz4/4) = [];%remove peaks less than 1 Hz
-[~,is] = sort(pks);%sort peaks by magnitude
-locs = locs(is);%sort locs by peak
-locs = locs(end-2:end);%take 3 largest peaks, probably really only 2 but just in case
-FOI = f2(locs);
-FOI = sort(FOI);
 end

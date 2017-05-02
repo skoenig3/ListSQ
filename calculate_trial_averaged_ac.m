@@ -4,6 +4,7 @@ function [trial_averaged_ac,trial_averaged_ac_FFT] = calculate_trial_averaged_ac
 %correlation for each trial, then averages across trials, and finally
 %normalizes
 
+
 %---Calculate Autocorrelation---%
 trial_averaged_ac= NaN(size(event_times,1),twin*2+1);
 for tr = 1:size(event_times,1);
@@ -11,6 +12,7 @@ for tr = 1:size(event_times,1);
     temp(isnan(temp)) = []; %remove trailing nans if they exist
     trial_averaged_ac(tr,:) = xcorr(temp,temp,twin);
 end
+
 
 trial_averaged_ac(:,twin+1) = 0; %set center value to zero for now
 trial_averaged_ac = mean(trial_averaged_ac); %average across trials

@@ -4,7 +4,7 @@
 % code imports data from List_Saccade_AnalysisV2 results and looks at how
 % modulated the whole population is by saccades. Analysis includes...
 
- set(0,'DefaultFigureVisible','off');
+%set(0,'DefaultFigureVisible','off');
 
 clear,clc
 task = 'ListSQ';
@@ -48,25 +48,27 @@ for monkey = 2:-1:1
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
     if monkey == 1%strcmpi(monkey,'Vivian')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
+        excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
+        figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
-        listsq_read_excel(data_dir,excel_file);
+%         listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
-        predict_rt = 156;%156 ms prediction 5-percentile
+        predict_rt = 155;%155.85 ms prediction 5-percentile
         chamber_zero = [13.5 -11]; %AP ML
         
     elseif monkey ==2%strcmpi(monkey,'Tobii')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
+        excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Tobii\';
         excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
+        figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Figures\';
         
-        predict_rt = 138;%ms prediction 5-percentile
+        predict_rt = 135;%ms prediction 5-percentile
         chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
         
-        listsq_read_excel(data_dir,excel_file);
+%         listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
         session_data(end) = [];%last file doesn't have strobe signal working so have no timing singnal :(
     end
@@ -113,9 +115,9 @@ for monkey = 2:-1:1
         end
         LFPchannels(bad_channels) = NaN;
         
-        for unit = 1:num_units
-            if nansum(nansum(saccade_locked_firing{unit})) > 100
-                if temporal_info.saccade.shuffled_temporalstability_prctile(1,unit) > 95  %1st 2nd half corr
+        for unit = 4% 1:num_units
+            if nansum(nansum(fixation_locked_firing{unit})) > 100
+                if temporal_info.fixation.shuffled_temporalstability_prctile(1,unit) > 95  %1st 2nd half corr
                              
                     lfp_channel_num = str2double(unit_stats{1,unit}(6));
                     if isnan(LFPchannels(lfp_channel_num)) %no LFP or bad lfp for channel spike was recorded on
@@ -124,10 +126,10 @@ for monkey = 2:-1:1
                     end
                     desired_channel = LFPchannels(lfp_channel_num);
                     
-                    %saccade_information{unit}(1,sac_ind) %trial #
-                    %saccade_information{unit}(2,sac_ind) %saccade start time from trial start
+                    %fixation_information{unit}(1,sac_ind) %trial #
+                    %fixation_information{unit}(2,sac_ind) %saccade start time from trial start
                     
-                    trial_nums = unique(saccade_information{unit}(:,1));
+                    trial_nums = unique(fixation_information{unit}(:,1));
                     
                     %get important task specific information
                     [itmlist,sequence_items,~] = read_ListSQ_itm_and_cnd_files(item_file,cnd_file);
@@ -158,20 +160,20 @@ for monkey = 2:-1:1
                         LFP_power{t} = trialpower;
                     end
                     
-                    saccade_firing = saccade_locked_firing{unit}(saccade_information{unit}(:,4) > image_on_twin,:);
+                    saccade_firing = fixation_locked_firing{unit}(fixation_information{unit}(:,4) > image_on_twin,:);
                     saccade_firing(nansum(saccade_firing,2) == 0,:) = [];%remove saccades without spikes
                     [firing_rate,~]= nandens(saccade_firing,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
                     
                     spike_phase = cell(1,twin1+twin2);
                     saccade_num = cell(1,twin1+twin2);
                     count = 0;
-                    for f = 1:length(saccade_information{unit})
-                        if saccade_information{unit}(f,4) > image_on_twin;
-                            if sum(saccade_locked_firing{unit}(f,:)) > 0 %there were spikes
-                                trial = saccade_information{unit}(f,1);
-                                spks = find(saccade_locked_firing{unit}(f,:));
-                                sac_num = saccade_information{unit}(f,3);
-                                t0 = saccade_information{unit}(f,2)-twin1-1;
+                    for f = 1:length(fixation_information{unit})
+                        if fixation_information{unit}(f,4) > image_on_twin;
+                            if sum(fixation_locked_firing{unit}(f,:)) > 0 %there were spikes
+                                trial = fixation_information{unit}(f,1);
+                                spks = find(fixation_locked_firing{unit}(f,:));
+                                sac_num = fixation_information{unit}(f,3);
+                                t0 = fixation_information{unit}(f,2)-twin1-1;
                                 for s = 1:length(spks);
                                     tind = spks(s)+t0;
                                     spike_phase{spks(s)} = [spike_phase{spks(s)} LFP_phase{trial}(:,tind,:)];
@@ -233,7 +235,7 @@ for monkey = 2:-1:1
                     ylabel('Firing Rate (Hz)')
                     title('Saccade Aligned Firing Rate')
                     
-                    
+                    %%
                     time_zero = twin1; %alinged to start of saccade
                     for freq = 1:length(wfq);
                        time_period = 1000/wfq(freq); %time period for 1 cycle
@@ -280,8 +282,8 @@ for monkey = 2:-1:1
                             sqrt(sum(sin(alpha-mean_phase).^2)*sum(sin(phi_time-mean_phi_time).^2));
                         correlation = abs(correlation); %added not originaly part of equation since doing 2 period direction can be wrong
                         
-                        if mod(freq,2) == 1 && freq > 1%plot every other
-                            subplot(4,4,(freq+1)/2)
+                        if mod(freq,2) == 0 && freq > 1%plot every other
+                            subplot(4,4,(freq)/2)
                             plot(time_phase{freq}(1,:),time_phase{freq}(2,:),'.k')
                             set(gca,'Xtick',0:100:600);
                             xlim([100 600])
@@ -304,8 +306,8 @@ for monkey = 2:-1:1
                     end
                     
                     subtitle([task_file(1:8) ' ' unit_names{unit} ', ' num2str(count) ' saccades']);
-                    save_and_close_fig(figure_dir,[task_file(1:8) '_' unit_names{unit} '_Fit_Spike_Phase'])
-                    
+                    %save_and_close_fig(figure_dir,[task_file(1:8) '_' unit_names{unit} '_Fit_Spike_Phase'])
+                    %%
                         
                     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                     %%%---Spike Prefered Phase---%%%
@@ -344,7 +346,7 @@ for monkey = 2:-1:1
 
                         MLR = circ_r(alpha');
                         mean_phase = circ_mean(alpha');
-                        stats = circ_stats(alpha'); %mean,median,etc...
+                        %stats = circ_stats(alpha'); %mean,median,etc...
                         [pval, z] = circ_rtest(alpha');
                         
                      
@@ -364,12 +366,12 @@ for monkey = 2:-1:1
                             subplot(4,4,(freq+1)/2)
                             polarplot(degrees*pi/180,[means means(1)]);
                             hold on
-                            polarplot([stats.median stats.median],[0 max(means)])
+                           %polarplot([stats.median stats.median],[0 max(means)])
                             hold off
                             set(gca,'RTick',[]);
                             set(gca,'ThetaTick',[0 45 90 135 180 225 270 315])
 
-                            title([num2str(wfq(freq),3) ' Hz, phase: ' num2str(stats.median*180/pi,3)]);
+                            %title([num2str(wfq(freq),3) ' Hz, phase: ' num2str(stats.median*180/pi,3)]);
                       end
                         
                         maxpp = degrees(find(means == max(means)))*pi/180;
@@ -380,7 +382,7 @@ for monkey = 2:-1:1
                     end
                     
                     subtitle([task_file(1:8) ' ' unit_names{unit} ', ' num2str(count) ' saccades']);
-                    save_and_close_fig(figure_dir,[task_file(1:8) '_' unit_names{unit} '_Phase_Distribution'])
+                    %save_and_close_fig(figure_dir,[task_file(1:8) '_' unit_names{unit} '_Phase_Distribution'])
                     
                     %---Define Peak Times to Associated with phase---%
                     firing_rate = firing_rate-mean(firing_rate);%normalize firing rate
