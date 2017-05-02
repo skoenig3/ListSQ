@@ -20,13 +20,11 @@ min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any bloc
 Fs = 1000; %Hz sampling frequency
 imageX = 800; %horizontal image size
 imageY = 600; %vertical image size
-
-bin_deg = 1; %number of degrees per bin
-bin_deg2 = 45; %initial degree bins to determine time of peak direction modualtion
-smval_deg = 18; %9 degrees std
-smval = 30; %smoothing in time
+saccades_with_spikes = [];
+smval_deg = 6;%18 %9 degrees std
 
 
+place_firing = [];
 
 %---Values All Fixations out2out and in2in---%
 all_mrls = []; %all observed MRLs (mean resultant vector length) ignoring out2in and in2out
@@ -45,6 +43,7 @@ prefered_firing_rate_curves = [];
 anti_prefered_firing_rate_curves = [];
 ratio_prefered = [];
 all_windows  = [];
+normalized_prefered = [];
 
 figure_dir = {};
 all_dirs = []; %saccade directions for significant units
@@ -59,7 +58,7 @@ for monkey = 2:-1:1
         figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
         predict_rt = 156;%156 ms prediction 5-percentile
@@ -74,12 +73,12 @@ for monkey = 2:-1:1
         predict_rt = 138;%ms prediction 5-percentile
         chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
         session_data(end) = [];%last file doesn't have strobe signal working so have no timing singnal :(
     end
     
-    for sess =1:length(session_data)
+    for sess = 1:length(session_data)
         %read in task file data
         [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,~]=...
             get_task_data(session_data{sess},task);
@@ -105,8 +104,8 @@ for monkey = 2:-1:1
         end
         
         disp(task_file(1:8))
-        if exist([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'],'file') %want to remove later
-            load([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'])
+        if exist([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'],'file') %want to remove later
+            load([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'])
             load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info')
             load([data_dir  task_file(1:8) '-Place_Cell_Analysis.mat']);
         else
@@ -116,8 +115,15 @@ for monkey = 2:-1:1
             continue
         end
         
+        
+        twinad1 = 200;%presaccade window
+        twinad2 = 400;%pos saccade window
+        start_window = twinad1-min_fix_dur;%how early before saccade can you look for direction tuning
+        end_window = twinad1+min_fix_dur+44;%how late after saccade can you look for direction tuning
+        %minimum fixation duration + median saccade duration of 44 ms, some neurons have
+        
         num_units = size(unit_stats,2);
-        for unit = 1:num_units
+        for unit =1:num_units
             if ~isnan(mrls.all_fixations(unit)) %if unit was processed
                 
                 %---Values All Fixations out2out and in2in---%
@@ -140,58 +146,57 @@ for monkey = 2:-1:1
                 end
                 
                 if  mrls.all_fixations_shuffled_prctile(unit) > 95
-                    
-                    %---Get Firing Rate Curves for Prefered vs AntiPreferredDirections---%
-                    %unfortunately not enough was saved
-                    degrees = [0:bin_deg:360]-180;
-                    egrees = degrees(2:end);
-                    degrees = degrees*pi/180;
-                    % degrees = [degrees degrees(1)];
-                    
-                    fix_aligned = list_fixation_locked_firing{unit}; %fixation aligned firing rate
-                    sac_dirs = saccade_direction{unit}; %saccade directions organized the same way as fix_algined
-                    fr = nandens(fix_aligned,smval,'gauss',1000,'nanflt'); %firing rate curve aligned to fixations
-                    
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    %%%---Method 2: Determine time window of interest based on Time of Peak Firing Rate Modulation---%%%
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    %prefered since we currently assume most units show a preference for
-                    %certain stimulus features at a particular time relative to eye
-                    %movements. Method simply finds the maximum firing rate deviation from
-                    %the mean when we bin the firing rate curves into arbitrary directions.
-                    %Note: the exact bins are not important for this method just to remove
-                    %the anti-prefered direction since this seems to often cause inhbition.
-                    degrees2 = [0:bin_deg2:360]-180;
-                    curves = NaN(length(degrees2),twin1+twin2);
-                    for bin = 2:length(degrees2)
-                        these_directions = (sac_dirs < degrees2(bin) & sac_dirs >= degrees2(bin-1));
-                        curves(bin,:) = nandens(fix_aligned(these_directions,:),30,'gauss',Fs);
-                    end
-                    mean_of_curves = nanmean(fr);
-                    crude_direction_curves = curves; %save for later
-                    curves = abs(curves-mean_of_curves); %negatvie and positive work
-                    %don't include more than 100 ms before fixation and 200 ms after, have
-                    %yet to see a good example with prominent tuning outside this anyway
-                    time_of_max_modulation = find(curves(:,100:400) == max(max(curves(:,100:400))));
-                    [~,time_of_max_modulation] = ind2sub(size(curves(:,100:400)),time_of_max_modulation); %got to convert back into time index
-                    time_of_max_modulation = time_of_max_modulation+100; %since ingored the first 100 ms before
-                    window = time_of_max_modulation-((window_width/2)-1):time_of_max_modulation+window_width/2; %take window around peak
-                    
-                    if (spatial_info.shuffled_rate_prctile(unit) > 95) || (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
-                        fix_aligned = fix_aligned(in_out{unit} == 2 | in_out{unit} == 4,:); %fixations in2in or out2out
-                        sac_dirs = sac_dirs(in_out{unit} == 2 | in_out{unit} == 4); %directions for fixations in2in or out2out
-                    end
-                    
+
+                    window = all_direction_windows{unit};
                     all_windows = [all_windows {window}];
                     
-                    bin_deg = 12;
-                    [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,fix_aligned,window,sac_dirs);
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    %%%---Grab Saccade Aligned Activity--%%%
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    sac_aligned = saccade_aligned_firing{unit}; %fixation aligned firing rate
+                    sac_dirs = saccade_directions{unit}; %saccade directions organized the same way as sac_algined
+                    fix_starts = fixation_starts{unit};
+                    fix_ends = fixation_ends{unit};
+                    
+                    %---Remove Counfounding Eye Movements for Spatially Modulated Neurons---%
+                    %take eye data from fixations in2in or out2out since in2out or out2in
+                    %could be biased by field location creating artificial direction tuning
+                    % but only do this if spatial (both criterion)
+                    if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+                        sac_aligned = sac_aligned(sac_in_out{unit} == 2 | sac_in_out{unit} == 4,:); %fixations in2in or out2out
+                        sac_dirs = sac_dirs(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for fixations in2in or out2out only
+                        fix_starts = fix_starts((sac_in_out{unit} == 2 | sac_in_out{unit} == 4));
+                        fix_ends = fix_ends((sac_in_out{unit} == 2 | sac_in_out{unit} == 4));
+                    end
+                    
+                    %---Remove Fixations that are too short in duration---%
+                    window_width = length(all_direction_windows{unit});
+                    window_end = all_direction_windows{unit}(end);
+                    window_start = all_direction_windows{unit}(1);
+                    if window_end > end_window
+                        window_end = all_direction_windows{unit}(end)-twinad1;
+                        %remove fixations shorter than window as these could be
+                        %contaminated by the next saccade
+                        fixations_too_short = find(fix_ends < window_end);
+                        sac_dirs(fixations_too_short) = [];
+                        sac_aligned(fixations_too_short,:) = [];
+                    end
+                    if window_start < twinad1
+                        fixations_too_short = find((twinad1+fix_starts) > window_start);
+                        sac_dirs(fixations_too_short) = [];
+                        sac_aligned(fixations_too_short,:) = [];
+                    end
+    
+                    [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,sac_aligned,window,sac_dirs);
                     binned_firing_rate_curves{1,unit} = mean_binned_firing_rate; %binned firing rates
                     [prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
-                        select_prefred_indeces(binned_firing_rate_curves{1,unit},degrees,sac_dirs,2);
+                        select_prefred_indeces(binned_firing_rate_curves{1,unit},degrees,sac_dirs,smval_deg,bin_deg);
                     
-                    antipref = nandens3(fix_aligned(anti_prefered_dirs,:),smval,1000);
-                    pref = nandens3(fix_aligned(prefered_dirs,:),smval,1000);
+                    if strcmpi(task_file(1:8),'TO160515')
+                        disp('now')
+                    end
+                    antipref = nandens3(sac_aligned(anti_prefered_dirs,:),smval,1000);
+                    pref = nandens3(sac_aligned(prefered_dirs,:),smval,1000);
                     a = antipref;
                     a(a < 0.1) = mean(a);
                     a(a == 0) = 1;
@@ -207,6 +212,11 @@ for monkey = 2:-1:1
                         disp('now')
                     end
                     
+                    norm = pref-antipref; 
+                    norm = norm-mean(norm);
+                    norm = norm/max(norm);
+                    normalized_prefered = [normalized_prefered; norm];
+                                        
                     pref = pref-mean(pref);
                     pref = pref/max(abs(pref));
                     antipref = antipref-mean(antipref);
@@ -214,9 +224,33 @@ for monkey = 2:-1:1
                     
                     prefered_firing_rate_curves = [prefered_firing_rate_curves; pref];
                     anti_prefered_firing_rate_curves = [anti_prefered_firing_rate_curves; antipref];
+                else
+                    sac_aligned = saccade_aligned_firing{unit}; %fixation aligned firing rate
+                    sac_dirs = saccade_directions{unit}; %saccade directions organized the same way as sac_algined
+                    sac_amps = saccade_amplitudes{unit}/24; %saccade directions organized the same way as sac_algined
+                    
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    %---Determine if Unit is Significantly Modulated by Saccade Direction--%
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    %take eye data from fixations in2in or out2out since in2out or out2in
+                    %could be biased by field location creating artificial direction tuning
+                    % but only do this if spatial (both criterion)
+                    if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+                        sac_aligned = sac_aligned(sac_in_out{unit} == 2 | sac_in_out{unit} == 4,:); %fixations in2in or out2out
+                        sac_dirs = sac_dirs(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for fixations in2in or out2out only
+                        sac_amps = sac_amps(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for fixations in2in or out2out only
+                    end
+                    %remove saccades that are too big since wont have many anyway
+                    sac_aligned_amp = sac_aligned;
+                    too_large = find(sac_amps > max_amplitude);
+                    sac_aligned_amp(too_large,:) = [];
+                    sac_amps(too_large)=[];
+                    
+                    window = all_direction_windows{unit};
+                    spike_count = sum(sac_aligned_amp(:,window),2);
+                    saccades_with_spikes = [saccades_with_spikes sum(spike_count > 0)];
+                    
                 end
-                
-                %%
             end
         end
     end
@@ -230,11 +264,15 @@ disp([num2str(sum(all_mrl_out_pctiles > 95 & all_mrl_pctiles > 95)) ' directiona
 disp('--------------------------------------------------------------')
 disp([num2str(sum(all_mrl_pctiles > 95 & spatialness == 1)) ' directionally modulated place cells for "all fixations"'])
 disp([num2str(sum(all_mrl_out_pctiles > 95 & spatialness == 1)) ' directionally modulated place cells for OUT2OUT fixations'])
+disp('--------------------------------------------------------------')
+disp(['Analyzed ' num2str(sum(spatialness == 1 & ~isnan(all_mrl_pctiles))) ' place cells'])
+disp(['Analyzed ' num2str(sum(spatialness == 0 & ~isnan(all_mrl_pctiles))) ' non-place cells'])
+disp(['Analyzed ' num2str(sum(~isnan(all_mrl_pctiles))) ' total cells'])
 %%
-%%---Copy Relevant Figures to Summary Directory---%
+%---Copy Relevant Figures to Summary Directory---%
 for unit = 1:length(all_unit_names)
     if all_mrl_pctiles(unit) > 95
-        sub_dir1 = 'Saccade Direction\';
+        sub_dir1 = '\Saccade Direction and Amplitude\';
         name1 = [all_unit_names{unit} '_Saccade_Direction_Analysis.png'];
         if spatialness(unit) == 1 %place cell
             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
@@ -271,7 +309,7 @@ plot(tm,nanmean(prefered_firing_rate_curves),'g')
 plot([tm(1) tm(end)],[0 0],'k')
 plot([0 0],[-1 1],'k--')
 hold off
-xlabel('Time From Fixation Start (ms)')
+xlabel('Time From Saccade Start (ms)') 
 ylabel('Normalized Firing Rate')
 title('Population Average Mormalzed Firing Rates')
 legend('Anti-prefered','Prefered')
@@ -280,19 +318,19 @@ subplot(2,2,2)
 [~,mxi] = max(prefered_firing_rate_curves');
 [~,si] = sort(mxi);
 imagesc(tm,1:size(prefered_firing_rate_curves,1),prefered_firing_rate_curves(si,:))
-xlabel('Time From Fixation Start (ms)')
+xlabel('Time From Saccade Start (ms)') 
 ylabel('Neuron #')
 colormap('jet')
 title('Time Cell Plot')
-%%
+
 subplot(2,2,3)
 plot(tm,nandens3(ratio_prefered,20,1))
-xlabel('Time From Fixation Start (ms)')
+xlabel('Time From Saccade Start (ms)') 
 ylabel('Ratio')
 title('Average Ratio of Prefered/Anti-Prefered')
 box off
 
-%%
+
 window_conc = zeros(1,twin1+twin2);
 for w = 1:length(all_windows);
     window_conc(all_windows{w}) = window_conc(all_windows{w})+1;
@@ -300,7 +338,123 @@ end
 
 subplot(2,2,4)
 plot(tm,100*window_conc/length(all_windows))
-xlabel('Time From Fixation Start (ms)')
+xlabel('Time From Saccade Start (ms)') 
 ylabel('% of Units')
 title('Distribution of 100 ms Window with Greatest Direction Modulation')
 box off
+%%
+allvals = normalized_prefered;
+allvals = allvals(allvals < 0);
+stdvals = std(allvals);
+
+%%
+median_window = [];
+window_len = [];
+for n = 1:size(normalized_prefered,1)
+    median_window(n) = median(all_windows{n});
+    window_len(n) = length(all_windows{n});
+    min_window = min(all_windows{n});
+    max_window = max(all_windows{n});
+    if min_window > 50
+        min_window = min_window-50;
+    else
+        min_window = 1;
+    end
+    if max_window > twin2+twin1-50
+        max_window = twin2+twin1;
+    else
+        max_window = max_window+50;
+    end
+    allvals(n,min_window:max_window) = NaN;
+end
+
+%%
+%%
+figure
+subplot(1,2,1)
+[~,mxi] = max(normalized_prefered');
+[~,si] = sort(mxi);
+imagesc(tm,1:size(normalized_prefered,1),normalized_prefered(si,:))
+xlabel('Time From Saccade Start (ms)') 
+ylabel('Neuron #')
+colormap('jet')
+title('Time Cell Plot-sorted by max')
+caxis([-stdvals 1])
+axis square
+
+
+subplot(1,2,2)
+[~,si2] = sort(median_window);
+imagesc(tm,1:size(normalized_prefered,1),normalized_prefered(si2,:))
+xlabel('Time From Saccade Start (ms)') 
+ylabel('Neuron #')
+colormap('jet')
+title('Time Cell Plot-sorted by window')
+caxis([-stdvals 1])
+axis square
+
+figure
+
+spatial = normalized_prefered(spatialness(all_mrl_pctiles > 95) == 1,:);
+subplot(2,2,1)
+[~,mxi] = max(spatial');
+[~,si] = sort(mxi);
+imagesc(tm,1:size(spatial,1),spatial(si,:))
+xlabel('Time From Saccade Start (ms)') 
+ylabel('Neuron #')
+colormap('jet')
+title('Spatial Neurons')
+caxis([-stdvals 1])
+axis square
+
+window_conc = zeros(1,twin1+twin2);
+spatial_windows = all_windows(spatialness(all_mrl_pctiles > 95) == 1);
+for w = 1:length(spatial_windows);
+    window_conc(spatial_windows{w}) = window_conc(spatial_windows{w})+1;
+end
+
+subplot(2,2,3)
+plot(tm,100*window_conc/length(all_windows))
+axis square
+box off
+
+
+nonspatial = normalized_prefered(spatialness(all_mrl_pctiles > 95) == 0,:);
+
+subplot(2,2,2)
+[~,mxi] = max(nonspatial');
+[~,si] = sort(mxi);
+imagesc(tm,1:size(nonspatial,1),nonspatial(si,:))
+xlabel('Time From Saccade Start (ms)') 
+ylabel('Neuron #')
+colormap('jet')
+title('Non-Spatial Neurons')
+caxis([-stdvals 1])
+axis square
+
+window_conc = zeros(1,twin1+twin2);
+nonspatial_windows = all_windows(spatialness(all_mrl_pctiles > 95) == 0);
+for w = 1:length(nonspatial_windows);
+    window_conc(nonspatial_windows{w}) = window_conc(nonspatial_windows{w})+1;
+end
+
+subplot(2,2,4)
+plot(tm,100*window_conc/length(all_windows))
+axis square
+box off
+%%
+pre_saccadic = [];
+peri_saccadic = [];
+post_saccadic = [];
+
+for w = 1: length(all_windows)
+    ind = all_windows{w};
+    if all(ind < twinad1)
+        pre_saccadic = [pre_saccadic w];
+    elseif all(ind > twinad1+44)
+        post_saccadic = [post_saccadic w];
+    else
+        peri_saccadic = [peri_saccadic w];
+    end    
+end
+
