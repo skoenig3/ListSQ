@@ -20,6 +20,7 @@ imageY = 600;
 t = -500:499;
 avg_fixation_firing_rates = cell(1,2);
 peak_fixation_firing_rates = cell(1,2);
+spatialness = [];
 
 sig_count = zeros(1,3);
 
@@ -29,7 +30,7 @@ for monkey = 1:2
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
     if monkey == 1%strcmpi(monkey,'Vivian')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
+        excel_dir = 'P:\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
         
@@ -40,7 +41,7 @@ for monkey = 1:2
         chamber_zero = [13.5 -11]; %AP ML
         
     elseif monkey ==2%strcmpi(monkey,'Tobii')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
+        excel_dir = 'P:\eblab\PLX files\Tobii\';
         excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
         
@@ -68,6 +69,7 @@ for monkey = 1:2
         
         if exist([data_dir task_file(1:8) '-Fixation_locked_Sequence_results.mat'],'file') %want to remove later
             load([data_dir task_file(1:8) '-Fixation_locked_Sequence_results.mat']);
+            load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info')
         else
             continue
         end
@@ -79,13 +81,19 @@ for monkey = 1:2
                 if fixation_info.rate_prctile(unit) > 95
                     col = 1;%significant modulation
                     sig_count(1) = sig_count(1)+1;
-                elseif fixation_info2.rate_prctile(unit) > 95
-                    col = 1;%significant modulation
-                    sig_count(2) = sig_count(2)+1;
+                    %                 elseif fixation_info2.rate_prctile(unit) > 95
+                    %                     col = 1;%significant modulation
+                    %                     sig_count(2) = sig_count(2)+1;
                 else
                     col = 2;%not saccade modulated
-                     sig_count(3) = sig_count(3)+1;
-                     continue
+                    sig_count(3) = sig_count(3)+1;
+                    continue
+                end
+                
+                if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+                    spatialness = [spatialness 1]; %place cell
+                else
+                    spatialness = [spatialness 0]; %non place cell
                 end
                 
                 
@@ -95,13 +103,22 @@ for monkey = 1:2
                 
                 
                 [firing_rate,~]= nandens(fixation_firing,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                firing_rate = firing_rate-nanmean(firing_rate);
-                fr = firing_rate;
-                if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                    firing_rate = firing_rate/max(firing_rate);
-                else%normalize to min %could have some neurons that only show supression
-                    firing_rate = firing_rate/min(firing_rate);
+                %                 firing_rate = firing_rate-nanmean(firing_rate);
+                %                 fr = firing_rate;
+                %                 if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+                %                     firing_rate = firing_rate/max(firing_rate);
+                %                 else%normalize to min %could have some neurons that only show supression
+                %                     firing_rate = firing_rate/min(firing_rate);
+                %                 end
+                
+                
+                if mean(firing_rate(1:twin)) > mean(firing_rate(twin:end))
+                    firing_rate = firing_rate-nanmean(firing_rate(1:twin));%maintains that first part is higher
+                else
+                    firing_rate = firing_rate-nanmean(firing_rate(twin+1:end));
                 end
+                fr = firing_rate;
+                firing_rate = firing_rate/max(firing_rate);
                 
                 avg_fixation_firing_rates{col} =  [avg_fixation_firing_rates{col}; firing_rate];
                 fr = fr/max(fr);

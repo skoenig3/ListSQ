@@ -13,6 +13,8 @@ monkey_all_unit_count = zeros(2,2);%row 1 place row 2 non-place, column by monke
 all_multi_unit_count = zeros(1,2); %all_multi_unit_countunits
 all_place_cell_unit_names = {}; %place cell unit names
 all_place_cell_monkeys = []; %1s and 2s
+all_place_cell_spatial_skaggs = [];
+all_non_place_cell_spatial_skaggs = [];
 
 %---Spatial Correlation Values for all cells---%
 all_place_cell_spatial_corrs = []; %place cell spatial correlations
@@ -96,11 +98,13 @@ for monk =2:-1:1
                 
                 %---Spatial Correlation Values for all cells---%
                 all_place_cell_spatial_corrs = [all_place_cell_spatial_corrs spatial_info.spatialstability_halves(unit)]; %place cell spatial correlations
+                all_place_cell_spatial_skaggs = [all_place_cell_spatial_skaggs spatial_info.shuffled_rate_prctile(unit)];
                 
             else
                 
                 monkey_all_unit_count(2,monk) = monkey_all_unit_count(2,monk)+1;%row 1 place row 2 non-place, column by monkey
                 all_non_place_cell_spatial_corrs = [all_non_place_cell_spatial_corrs  spatial_info.spatialstability_halves(unit)];%non-place cell spatial correlations
+                all_non_place_cell_spatial_skaggs = [all_non_place_cell_spatial_skaggs spatial_info.shuffled_rate_prctile(unit)];
             end
             
             

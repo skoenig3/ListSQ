@@ -77,13 +77,21 @@ for monkey = 1:2
                 if (ITI_temporal_info.rate_prctile(unit) > 95) && (ITI_temporal_info.temporalstability_prctile(1,unit) > 95)
                     firing_rate = time_locked_firing{unit};
                     [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                      firing_rate = firing_rate-nanmean(firing_rate);
-%                     firing_rate = firing_rate-whole_session_mean_firing_rate(unit);%remove average firing rate sort of like baseline
-                    if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                        firing_rate = firing_rate/max(abs(firing_rate));
-                    else%normalize to min %could have some neurons that only show supression
-                        firing_rate = firing_rate/min(firing_rate);
-                    end
+                    
+                     if nanmean(firing_rate(1:twin)) > nanmean(firing_rate(twin:end))
+                         firing_rate = firing_rate-nanmean(firing_rate(twin:end));%maintains that first part is higher
+                     else
+                          firing_rate = firing_rate-nanmean(firing_rate(1:twin));
+                     end
+                     firing_rate = firing_rate/max(firing_rate);
+
+%                       firing_rate = firing_rate-nanmean(firing_rate(1:twin));
+% %                     firing_rate = firing_rate-whole_session_mean_firing_rate(unit);%remove average firing rate sort of like baseline
+%                     if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+%                         firing_rate = firing_rate/max(abs(firing_rate));
+%                     else%normalize to min %could have some neurons that only show supression
+%                         firing_rate = firing_rate/min(firing_rate);
+%                     end
                     ITI_firing = [ITI_firing ; firing_rate];
                     
                                         
@@ -123,11 +131,14 @@ for monkey = 1:2
 end
 
 %% All Cells Aligned to Max
+vals = ITI_firing(:);
+vals = vals(vals < 0);
+
 figure
 
 [m,i] = max(ITI_firing,[],2);
 [mm,ii] = sort(i);
-imagesc([-200:1199],[1:size(ITI_firing,1)],ITI_firing(ii,:))
+imagesc([-twin:ITI_dur],[1:size(ITI_firing,1)],ITI_firing(ii,:))
 colormap('jet')
 hold on
 plot([0 0],[1 size(ITI_firing,1)],'w--');
@@ -135,6 +146,7 @@ hold off
 xlabel('Time from ITI start  (ms)')
 ylabel('Neuron #')
 title('ITI Period')
+caxis([-std(vals) 1])
 
 names = all_unit_names(ii);
 

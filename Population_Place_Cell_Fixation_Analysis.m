@@ -19,7 +19,7 @@ if ~isdir(summary_directory)
 end
 
 task = 'ListSQ';
-min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
+min_blks = 2; %only anaedlyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
 Fs = 1000; %Hz sampling frequency
 imageX = 800; %horizontal image size
 imageY = 600; %vertical image size
@@ -30,12 +30,18 @@ all_multi_unit_count = zeros(1,2); %all_multi_unit_countunits
 all_place_cell_unit_names = {}; %place cell unit names
 all_place_cell_monkeys = []; %1s and 2s
 place_cell_AP_location = []; %AP location of recorded place cell
+place_cell_subregion = []; %e.g. CA3 or CA1
+non_place_cell_subregion = [];
+
 n_in = []; %number of fixations ?->in
 n_out2in = [];%number of fixaitons out->in
 
 %---Spatial Correlation Values for all cells---%
 all_place_cell_spatial_corrs = []; %place cell spatial correlations
+all_place_cell_spatial_skagg_percents= []; %place cell skagg information score percentiles
 all_non_place_cell_spatial_corrs = [];%non-place cell spatial correlations
+all_non_place_cell_skagg_percents = [];%non-place cell skagg information score percentiles
+non_place_skagg_names = [];
 
 %---place field properties---%
 place_field_area = []; %area of place field
@@ -44,6 +50,7 @@ coverage = {}; %eye data coverage for place cells
 
 %---Place Cell Firing Rate Curves for List---%
 all_in_rates = [];%fixations out-> in
+all_in_minus_out_rates = [];%out-> in minus out-> out
 all_out_rates = []; %fixaiton out-> out normalized by max of out->out
 all_fixation_rates = [];%all fixaions normalized by max of all fixations
 all_list_peak_times = [];%time of peak firing rate of place cells for out-> in fixations
@@ -69,10 +76,10 @@ for monk =2:-1:1
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
     if strcmpi(monkey,'Vivian')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
+        excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
-        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
+        figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
         
         %listsq_read_excel(data_dir,excel_file);
@@ -82,10 +89,10 @@ for monk =2:-1:1
         chamber_zero = [13.5 -11]; %AP ML
         
     elseif strcmpi(monkey,'Tobii')
-        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
+        excel_dir = '\\towerexablox.wanprc.org\Buffalo\eblab\PLX files\Tobii\';
         excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
-        figure_dir{2} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Figures\';
+        figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Figures\';
         
         predict_rt = 138;%ms prediction 5-percentile
         chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
@@ -152,11 +159,20 @@ for monk =2:-1:1
                 all_place_cell_monkeys = [all_place_cell_monkeys monk]; %1s and 2s for monkey
                 place_cell_AP_location = [place_cell_AP_location chamber_zero(1)+ session_data{sess}.location(1)]; %AP location of recorded place cell
                 
+                subregion = session_data{sess}.subregion;
+                vals = textscan(subregion,'%s','Delimiter',',');
+                if length(vals{1}) == 1
+                    place_cell_subregion = [place_cell_subregion vals{1}];
+                else
+                    chan = str2double(unit_stats{1,unit}(6));
+                    place_cell_subregion = [place_cell_subregion vals{1}(chan)];
+                end
                 
                 %---Spatial Correlation Values for Place cells---%
                 all_place_cell_spatial_corrs = [all_place_cell_spatial_corrs spatial_info.spatialstability_halves(unit)];
+                all_place_cell_spatial_skagg_percents = [all_place_cell_spatial_skagg_percents spatial_info.shuffled_rate_prctile(unit)];
                 
-                
+
                 %---place field properties---%
                 H = define_spatial_filter(filter_width); %spatial filter
                 trial_data{1} = eyepos{unit}; %eye data
@@ -175,6 +191,7 @@ for monk =2:-1:1
                 %firing rate out-> in
                 firing_rate = list_fixation_locked_firing{unit}(in_out{unit} == 1,:); %get spike trains
                 in_curve = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
+                in_curve2 = in_curve;
                 in_curve = in_curve-nanmean(in_curve(1:twin1)); %remove base line
                 if ~isnan(stats_across_tasks(1,unit))%peak detected
                     in_curve = in_curve/in_curve(stats_across_tasks(1,unit));%divide by peak firing rate
@@ -188,9 +205,15 @@ for monk =2:-1:1
                 %firing rate out-> out
                 firing_rate = list_fixation_locked_firing{unit}(in_out{unit} == 4,:); %get spike trains
                 out_curve = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
+                out_curve2 = out_curve;
                 out_curve = out_curve-nanmean(out_curve(1:twin1)); %remove base line
                 out_curve = out_curve/nanmax(out_curve); %not sure what peak would be so normalize by max
                 all_out_rates = [all_out_rates; out_curve];%fixation out->out
+                
+                in_minus_out = in_curve2-out_curve2;
+                %in_minus_out = in_minus_out-mean(in_minus_out(1:twin1));
+                in_minus_out = in_minus_out/max(in_minus_out);
+                all_in_minus_out_rates = [all_in_minus_out_rates; in_minus_out];
                 
                 %firing rate for all fixations
                 firing_rate = list_fixation_locked_firing{unit};%get spike trains
@@ -370,6 +393,17 @@ for monk =2:-1:1
                 
                 %---Spatial Correlation Values for Non-Place cells---%
                 all_non_place_cell_spatial_corrs = [all_non_place_cell_spatial_corrs spatial_info.spatialstability_halves(unit)];
+                all_non_place_cell_skagg_percents = [all_non_place_cell_skagg_percents spatial_info.shuffled_rate_prctile(unit)];
+                non_place_skagg_names = [non_place_skagg_names  {[task_file(1:end-11) '_' unit_stats{1,unit}]}]; %unit name
+                
+                subregion = session_data{sess}.subregion;
+                vals = textscan(subregion,'%s','Delimiter',',');
+                if length(vals{1}) == 1
+                    non_place_cell_subregion = [non_place_cell_subregion vals{1}];
+                else
+                    chan = str2double(unit_stats{1,unit}(6));
+                    non_place_cell_subregion = [non_place_cell_subregion vals{1}(chan)];
+                end
             end
         end
     end
@@ -391,47 +425,47 @@ for i = 1:length(nans)
 end
 %%
 %---Second Copy Relevant Figures to Summary Directory---%
-for unit = 1:length(all_place_cell_unit_names)
-    sub_dir1 = 'Place Cells Fixation Analysis\Best Place Cells Fixation Analysis\';
-    sub_dir2 = 'Spatial Analysis\';
-    
-    name1 = [all_place_cell_unit_names{unit} '_place_cell_fixation_analysis.png'];
-    name2 = [all_place_cell_unit_names{unit} '_place_cell_Sequence_InSideOutside.png'];
-    name3 = [all_place_cell_unit_names{unit} '_List_spatial_analysis.png'];
-    
-    if sig_p_list(unit) == 0 %not reliable
-        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
-            [summary_directory 'Not reliable\' name1])
-        if ~isnan(sig_p_seq(unit))
-            copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
-                [summary_directory 'Not reliable\' name2])
-        end
-        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
-            [summary_directory 'Not reliable\' name3])
-    elseif isnan(all_list_peak_times(unit))%no peak in firing rate detected
-        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
-            [summary_directory 'No peak\' name1])
-        if ~isnan(sig_p_seq(unit))
-            copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
-                [summary_directory 'No peak\' name2])
-        end
-        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
-            [summary_directory 'No peak\' name3])
-    else %passes all criterion
-        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
-            [summary_directory name1])
-        if ~isnan(sig_p_seq(unit))
-            copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
-                [summary_directory name2])
-        end
-        copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
-            [summary_directory name3])
-    end
-end
+% for unit = 1:length(all_place_cell_unit_names)
+%     sub_dir1 = 'Place Cells Fixation Analysis\Best Place Cells Fixation Analysis\';
+%     sub_dir2 = 'Spatial Analysis\';
+%     
+%     name1 = [all_place_cell_unit_names{unit} '_place_cell_fixation_analysis.png'];
+%     name2 = [all_place_cell_unit_names{unit} '_place_cell_Sequence_InSideOutside.png'];
+%     name3 = [all_place_cell_unit_names{unit} '_List_spatial_analysis.png'];
+%     
+%     if sig_p_list(unit) == 0 %not reliable
+%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
+%             [summary_directory 'Not reliable\' name1])
+%         if ~isnan(sig_p_seq(unit))
+%             copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
+%                 [summary_directory 'Not reliable\' name2])
+%         end
+%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
+%             [summary_directory 'Not reliable\' name3])
+%     elseif isnan(all_list_peak_times(unit))%no peak in firing rate detected
+%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
+%             [summary_directory 'No peak\' name1])
+%         if ~isnan(sig_p_seq(unit))
+%             copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
+%                 [summary_directory 'No peak\' name2])
+%         end
+%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
+%             [summary_directory 'No peak\' name3])
+%     else %passes all criterion
+%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name1],...
+%             [summary_directory name1])
+%         if ~isnan(sig_p_seq(unit))
+%             copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir1 name2],...
+%                 [summary_directory name2])
+%         end
+%         copyfile([figure_dir{all_place_cell_monkeys(unit)} sub_dir2 name3],...
+%             [summary_directory name3])
+%     end
+% end
 %% Remove Un-Reliable Neurons and Neurons wthout a definitve peak in firing rate
 
-% %remove neurons without significant difference in firnig rate between in
-% %and out of field
+%remove neurons without significant difference in firnig rate between in
+%and out of field
 all_in_rates(sig_p_list == 0,:) = [];
 all_fixation_rates(sig_p_list == 0,:) = [];
 all_out_rates(sig_p_list == 0,:) = [];
@@ -446,6 +480,9 @@ all_peak_seq(sig_p_list == 0) = [];
 all_seq_peak_times(sig_p_list == 0) = [];
 sig_p_seq(sig_p_list == 0) = [];
 all_list_peak_times(sig_p_list == 0) = [];
+all_in_minus_out_rates(sig_p_list == 0,:) = [];
+place_cell_AP_location(sig_p_list == 0) = [];
+place_cell_subregion(sig_p_list == 0) = [];
 sig_p_list(sig_p_list == 0) = [];
 
 %remove neurons without a definitive peak
@@ -463,6 +500,9 @@ all_seq_peak_times(isnan(all_list_peak_times)) = [];
 sig_p_seq(isnan(all_list_peak_times)) = [];
 sig_p_list(isnan(all_list_peak_times)) = [];
 all_peak_list(isnan(all_list_peak_times)) = [];
+all_in_minus_out_rates(isnan(all_list_peak_times),:) = [];
+place_cell_AP_location(isnan(all_list_peak_times)) = [];
+place_cell_subregion(isnan(all_list_peak_times)) = [];
 all_list_peak_times(isnan(all_list_peak_times)) = [];
 %% Plot Psuedo-Population Firing Rate Curves
 figure
@@ -699,6 +739,11 @@ xlim([-4 5])
 %% Plot Relationship between Peak times in List and Peak Times in Sequence
 x = all_list_peak_times(sig_p_seq == 1)-twin1;
 y = all_seq_peak_times(sig_p_seq == 1)-twin1;
+
+fr_too_slow = find((all_peak_list(sig_p_seq == 1) < 5) | (all_peak_seq(sig_p_seq == 1) < 5));
+x(fr_too_slow) = NaN;
+y(fr_too_slow) = NaN;
+
 x(isnan(y)) = [];
 y(isnan(y)) = [];
 [r,p] = corrcoef(x,y);
@@ -709,3 +754,111 @@ plot(x,y,'.k')
 xlabel('List Delay to Peak from Fixation Start (ms)')
 ylabel('Sequence Delay to Peak from Fixation Start (ms)')
 title('Significant Response in Sequence and List')
+
+%%
+%---Firing Rate Curves for out->in fixations---%
+vals = all_in_minus_out_rates(:,1:twin1); %"baseline" out of field firing rate
+vals = vals(:);
+vals(vals > 0) = [];
+
+figure
+[~,place_order] = sort(all_list_peak_times); %sort order by peak firing time
+imagesc([-twin1:twin2-1],[1:size(all_in_minus_out_rates,1)],all_in_minus_out_rates(place_order,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_in_minus_out_rates,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('out -> in')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+xlim([-twin1 twin2])
+colorbar
+
+figure
+[~,mxi] = max(all_in_minus_out_rates');
+[~,place_order] = sort(mxi); %sort order by peak firing time
+imagesc([-twin1:twin2-1],[1:size(all_in_minus_out_rates,1)],all_in_minus_out_rates(place_order,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_in_minus_out_rates,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('out -> in')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+xlim([-twin1 twin2])
+colorbar
+
+names = all_place_cell_unit_names(place_order);
+%%
+for n = 1:length(names)
+    if strcmpi(names{n},'TO160515_3_sig004d')
+        disp(n)
+    end
+end
+    
+%% AP axis vs Latency of Response
+avg_delay = zeros(1,30);
+for b = 0.5:0.5:15
+    if sum(place_cell_AP_location == b) >= 1
+    avg_delay(2*b) = mean(all_list_peak_times(place_cell_AP_location == b));
+    else
+         avg_delay(2*b) = NaN;
+    end
+end
+    
+figure
+plot(place_cell_AP_location,all_list_peak_times-twin1,'k.')
+hold on
+plot(0.5:0.5:15,avg_delay-twin1,'*r')
+hold off
+%% Subregion vs Latency of Response
+place_region_id = [];
+non_place_region_id = [];
+
+for p = 1:length(place_cell_subregion)
+    if strcmpi(place_cell_subregion{p},'DG')
+        place_region_id(p) = 0;
+    elseif strcmpi(place_cell_subregion{p},'CA1')
+        place_region_id(p) = 1;
+    elseif strcmpi(place_cell_subregion{p},'CA2')
+        place_region_id(p) = 2;
+    elseif strcmpi(place_cell_subregion{p},'CA3')
+        place_region_id(p) = 3;
+    elseif strcmpi(place_cell_subregion{p},'CA4')
+        place_region_id(p) = 4;
+    elseif strcmpi(place_cell_subregion{p},'ProSub') || strcmpi(place_cell_subregion{p},'ProS')
+        place_region_id(p) = 5;
+    else
+        disp('what')
+        disp(place_cell_subregion{p})
+    end
+end
+for p = 1:length(non_place_cell_subregion)
+    if strcmpi(non_place_cell_subregion{p},'DG')
+        non_place_region_id(p) = 0;
+    elseif strcmpi(non_place_cell_subregion{p},'CA1')
+        non_place_region_id(p) = 1;
+    elseif strcmpi(non_place_cell_subregion{p},'CA2')
+        non_place_region_id(p) = 2;
+    elseif strcmpi(non_place_cell_subregion{p},'CA3')
+        non_place_region_id(p) = 3;
+    elseif strcmpi(non_place_cell_subregion{p},'CA4')
+        non_place_region_id(p) = 4;
+    elseif strcmpi(non_place_cell_subregion{p},'ProSub') || strcmpi(non_place_cell_subregion{p},'ProS')
+        non_place_region_id(p) = 5;
+    else
+        disp('what')
+        disp(non_place_cell_subregion{p})
+    end
+end
+%%
+%combine DG & CA4
+place_region_id(place_region_id == 4) = 0;
+
+%combine CA2 & CA3
+place_region_id(place_region_id == 2) = 3;
+
+%combine ProSub and CA1
+place_region_id(place_region_id == 5) = 1;

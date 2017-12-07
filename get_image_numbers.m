@@ -32,7 +32,7 @@ for img = 1:max(which_img)
     if length(imgind) == 2
         novel_vs_repeat(imgind(2)) = 2; %second presentation is repeated
     elseif length(imgind) == 3
-        emailme(['Temporal Analysis Importing Data found 3 image presentations. Img #' num2str(img) ' ' cfg.dataset(end-20:end-11)])
+        %emailme(['Temporal Analysis Importing Data found 3 image presentations. Img #' num2str(img) ' ' cfg.dataset(end-20:end-11)])
         %remove that image from analysis. For TO set 13 seems to be a random
         %cortex accidental bug/error not in item/cnd file. Error is found
         %in both .plx and cortex save file. Should be image 65

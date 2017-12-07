@@ -1,4 +1,4 @@
-% Population Saccadic Modulation
+% Population Fixation Modulation
 % written Seth Konig 8/12/16
 %
 % code imports data from List_fixation_AnalysisV results and looks at how
@@ -32,6 +32,7 @@ eye_cell_amplitude_cell_status = [];%whether unit is amplitude modulated or not,
 
 %---Fixation Algined Firing Rate Curves---%
 avg_fixation_firing_rates = []; %significant firing rates
+flipped_avg_fixation_firing_rates = []; %significant firing rates +/- max
 all_firing_rates = []; %significant + non-significant
 avg_fixation_firing_rates_limited =[];%for significant ones limted to duration of 1 preceding saccade+ 1 fixation
 all_not_normalized = []; %significant firing rate not-normalized
@@ -106,10 +107,7 @@ for monk = 2:-1:1
         load([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat']);
         
         %should also load direction modulation
-        load([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'])
-        
-        %should also load amplitude modulation
-        load([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat'])
+        load([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'])
         
         if smval ~= 30
             error('Smoothing Value (2xStd) does not match expectations!')
@@ -146,7 +144,7 @@ for monk = 2:-1:1
                 end
                 
                 %is unit directionally modulated
-                if mrls.all_fixations_shuffled_prctile(unit) > 95
+                if mrls.all_saccades_shuffled_prctile(unit) > 95
                     eye_cell_direction_cell_status = [eye_cell_direction_cell_status 1];
                 else
                     eye_cell_direction_cell_status = [eye_cell_direction_cell_status 0];
@@ -168,6 +166,14 @@ for monk = 2:-1:1
                 all_mean_not_normalized = [all_mean_not_normalized; firing_rate-nanmean(firing_rate)];%significant firing rate but only mean subtracted
                 
                 firing_rate = firing_rate-nanmean(firing_rate);
+                fr2 = firing_rate;
+                if nanmax(fr2) < abs(nanmin(fr2))
+                   fr2 = fr2/nanmin(fr2);
+                else
+                    fr2 = fr2/nanmax(fr2);
+                end
+                flipped_avg_fixation_firing_rates = [flipped_avg_fixation_firing_rates; fr2];
+                
                 firing_rate = firing_rate/nanmax(abs(firing_rate));
                 avg_fixation_firing_rates = [avg_fixation_firing_rates; firing_rate]; %significant firing rates
                 all_firing_rates = [all_firing_rates; firing_rate]; %significant + non-significant
@@ -228,9 +234,14 @@ for unit = 1:length(all_eye_cell_unit_names)
     if eye_cell_place_cell_status(unit) == 1 %place cell
             copyfile([figure_dir{all_eye_cell_monkeys(unit)} sub_dir1 name1],...
             [summary_directory 'Place\' name1])
+    elseif eye_cell_direction_cell_status(unit) == 1 ||  eye_cell_amplitude_cell_status(unit) == 1
+           copyfile([figure_dir{all_eye_cell_monkeys(unit)} sub_dir1 name1],...
+            [summary_directory 'Other Spatial\' name1])
     elseif eye_cell_place_cell_status(unit) == 0 %non place cell
                  copyfile([figure_dir{all_eye_cell_monkeys(unit)} sub_dir1 name1],...
-            [summary_directory 'Non Place\' name1])
+            [summary_directory 'Non Spatial\' name1])
+    else
+        error('What')
     end
 end
 
@@ -255,11 +266,12 @@ subplot(2,3,4)
 hold on
 plot([t(1) t(end)],[0 0],'k')
 plot([0 0],[-1 1],'k--')
-plot(t,mean(avg_fixation_firing_rates))
+plot(t,mean(avg_fixation_firing_rates),'b')
+plot(t,mean(flipped_avg_fixation_firing_rates),'r')
 hold off
 xlabel('Time from fixation Start (ms)')
 ylabel('Normalized Firing Rate')
-title('All Significant Units')
+title('Normalized Significant Units')
 
 %---Plot Not-Normalized Average Firing Rate for Only Eye Movement Modulated Neurons---%
 subplot(2,3,2)
@@ -301,6 +313,7 @@ for i = 1:max(T)
     end
 end
 hold off
+title('Clustered Curves')
 
 subtitle('Population Averages')
 %% All units
@@ -357,3 +370,42 @@ xlim([-twin1 twin2])
 xlabel('Time from fixation Start')
 ylabel('Neuron #')
 caxis([-1 1])
+%%
+%Non-spatial neurons only
+
+fire_rates_non_spatial = avg_fixation_firing_rates(eye_cell_place_cell_status == 0 & ...
+    eye_cell_direction_cell_status == 0 & eye_cell_amplitude_cell_status == 0,:);
+
+
+flipped_rates_non_spatial = flipped_avg_fixation_firing_rates(eye_cell_place_cell_status == 0 & ...
+    eye_cell_direction_cell_status == 0 & eye_cell_amplitude_cell_status == 0,:);
+
+figure
+subplot(1,2,1)
+ylim([-1 1]);
+yl = ylim;
+hold on
+plot([t(1) t(end)],[0 0],'k')
+plot([0 0],[yl(1) yl(2)],'k--')
+plot(t,mean(fire_rates_non_spatial),'b')
+plot(t,mean(flipped_rates_non_spatial),'r')
+hold off
+xlabel('Time from fixation Start (ms)')
+ylabel('Normalized Firing Rate (')
+title('Average Firing Rate')
+legend(' ',' ','Max Norm','Max/Min Norm')
+axis square
+
+subplot(1,2,2)
+[m,i] = max(fire_rates_non_spatial(:,200:end),[],2);
+[mm,ii] = sort(i);
+imagesc(t,[1:size(fire_rates_non_spatial,1)],fire_rates_non_spatial(ii,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(fire_rates_non_spatial,1)],'w--');
+hold off
+xlim([-twin1 twin2])
+xlabel('Time from fixation Start')
+ylabel('Neuron #')
+subtitle([num2str(size(fire_rates_non_spatial,1)) ' Non-spatial Neurons'])
+axis square

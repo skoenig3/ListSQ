@@ -22,7 +22,7 @@ twin = 200;% how much time to take prior to ITT start and end
 % Delay in HPC to visual stimuli around 150-200 ms so probably want at least 2x this
 reward_pulse_dur = 115;%ms for each pulse sound, audio file confirms sound last ~115 ms
 IRI = 166;%ms inter-reward-interval
-reward_dur = 945; %116 ms per pulse *6;
+reward_dur = IRI*(6-1)+reward_pulse_dur; %116 ms per pulse *6;
 %takes into account the fact last pulse occured at 830 ms after first and
 %115 pulse duration
 trial_start_code = 15; %ITI code
@@ -72,7 +72,8 @@ disp('Aligning spike times to trial events')
 time_locked_firing = cell(1,num_units);
 trial_type = cell(1,num_units);%which sequence preceeded reward
 for unit = 1:num_units
-    time_locked_firing{unit} = NaN(num_trials,reward_dur+2*twin);
+    %time_locked_firing{unit} = NaN(num_trials,reward_dur+2*twin);
+    time_locked_firing{unit} = NaN(num_trials,reward_dur+twin);
     trial_type{unit} = NaN(1,num_trials);
 end
 %trial type 1: sequence 1
@@ -100,18 +101,21 @@ for t = 1:num_trials
                 %spikes from current trial
                 spikes = find(data(unit).values{t} == 1);
                 event_spikes = spikes(spikes > reward_start-twin & ...
-                    spikes <= reward_start+reward_dur+twin)-reward_start+twin;
+                    spikes <= reward_start+reward_dur)-reward_start+twin;
+                %event_spikes = spikes(spikes > reward_start-twin & ...
+                %spikes <= reward_start+reward_dur+twin)-reward_start+twin;
                 
-                temp = zeros(1,reward_dur+2*twin);
-                if trial_end-(reward_start+reward_dur+twin) < 0 %trial "ends" before window
-                    leftover = (reward_start+reward_dur+twin)-trial_end;
-                    if t ~= num_trials
-                        spks = find(data(unit).values{t+1}(1:leftover) == 1)+(trial_end-reward_start);
-                        event_spikes = [event_spikes spks];
-                    else
-                        temp(end-leftover+1:end) = NaN;
-                    end
-                end
+                temp = zeros(1,reward_dur+twin);
+                %temp = zeros(1,reward_dur+2*twin);
+%                 if trial_end-(reward_start+reward_dur+twin) < 0 %trial "ends" before window
+%                     leftover = (reward_start+reward_dur+twin)-trial_end;
+%                     if t ~= num_trials
+%                         spks = find(data(unit).values{t+1}(1:leftover) == 1)+(trial_end-reward_start);
+%                         event_spikes = [event_spikes spks];
+%                     else
+%                         temp(end-leftover+1:end) = NaN;
+%                     end
+%                 end
                 temp(event_spikes) = 1;
                 
                 time_locked_firing{unit}(t,:) = temp;
@@ -174,7 +178,8 @@ for unit = 1:num_units
     if (temporal_info.temporalstability_prctile(1,unit) > 95) && (temporal_info.rate_prctile(unit) > 95)
          [~,all_firing_rate_curves] = nandens(time_locked_firing{unit},smval,'gauss',Fs,'nanflt'); %trial-by-trial smoothed
         
-        all_curves = NaN(10*numshuffs,reward_dur+2*twin);
+        all_curves = NaN(10*numshuffs,reward_dur+twin);
+        %all_curves = NaN(10*numshuffs,reward_dur+2*twin);
         seq = trial_type{unit};
         parfor shuff = 1:(10*numshuffs) %~10000
             ind = randperm(length(seq));
@@ -195,7 +200,8 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Plot and Save Figures of Results---%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-t = -twin+1:reward_dur+twin;
+% t = -twin+1:reward_dur+twin;
+t = -twin+1:reward_dur;
 unit_names = unit_stats(1,:);
 for unit = 1:num_units
     if ~isempty(time_locked_firing{unit})

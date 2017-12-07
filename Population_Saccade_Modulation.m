@@ -109,7 +109,7 @@ for monk = 2:-1:1
         load([data_dir task_file(1:8) '-Saccade_Eyemovement_Locked_List_results.mat']);
         
         %should also load direction modulation
-        load([data_dir task_file(1:8) '-Saccade_Direction_Analysis.mat'])
+        load([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'])
         
         %should also load amplitude modulation
         load([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat'])

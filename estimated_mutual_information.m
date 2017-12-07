@@ -328,7 +328,6 @@ if ~isempty(trial_data)
             %---get rate map for even and odd trials---%
             [ratemaps_even_odd,~,eyepos_even_odd,spike_times_even_odd]...
                 = get_firing_rate_map_cvtnew({eyepos,spike_times},imageX,imageY,binsize,H,Fs,'even_odd');
-            
                       
             if imageX == 800 && imageY == 600
                 %set values outside of dot space to NaN

@@ -4,8 +4,8 @@
 
 clar
 task = 'cvtnew';
-set(0,'DefaultFigureVisible','OFF');
-for monkey = 2%:-1:1
+set(0,'DefaultFigureVisible','ON');
+for monkey = 1%2:-1:1
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
@@ -55,7 +55,7 @@ for monkey = 2%:-1:1
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Autmoatically analyze for Spatial cells for CVTNEW---%%%
-    for sess = 46:length(session_data)
+    for sess = length(session_data)%46, 17-19
         spatial_analysisV2(data_dir,figure_dir,session_data{sess},'cvtnew')
     end
     emailme('Done processing spatial')

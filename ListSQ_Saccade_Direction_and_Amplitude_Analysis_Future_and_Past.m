@@ -20,7 +20,7 @@ function ListSQ_Saccade_Direction_and_Amplitude_Analysis_Future_and_Past(data_di
 %2)%Code determines whether units are modulation by saccade ampltiude. Same
 %as above!
 
-% code not rechecked for bugs yet!
+% code rechecked for bugs SDK 5/2/17
 
 figure_dir = [figure_dir 'Saccade Direction and Amplitude\'];
 task = 'ListSQ';
@@ -38,8 +38,7 @@ img_off_code = 24; %image turned off
 smval = 30 ;%15 ms std, want to smooth at high frequency modulations
 min_fix_dur = 100; %100 ms, don't want fixations that are too short since won't get a good idea of firing pattern
 min_sac_amp = 48;%48 pixels = 2 dva, don't want mini/micro saccades too small and hard to detect
-min_firing_rate = 1;%Hz minimim firing rate sort of similar to min_saccades_with_spikes
-%min_saccades_with_spikes = 0.05;% 5% to remove neurons that have basically no activity since they pass too :(...
+min_saccades_with_spikes = 0.05;% 5% to remove neurons that have basically no activity since they pass too :(...
 %essentially 0.4 Hz threshold if window is 50 ms in wide
 
 %---saccade direction and amplitude parameters---%
@@ -52,11 +51,11 @@ max_amplitude = 16;%dva, approximately 95th percentile, don't have many large on
 
 twinad1 = 200;%presaccade window
 twinad2 = 400;%pos saccade window
+median_sac_dur = 44;
 tm = -twinad1+1:twinad2;
 start_window = twinad1-min_fix_dur;%how early before saccade can you look for direction tuning
-end_window = twinad1+min_fix_dur+44;%how late after saccade can you look for direction tuning
-%minimum fixation duration + median saccade duration of 44 ms, some neurons have
-%large latencies
+end_window = twinad1+min_fix_dur+median_sac_dur;%how late after saccade can you look for direction tuning,
+%some neurons have large latencies
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%---Load important Session Data and Information---%%%
@@ -89,7 +88,6 @@ if all(isnan(valid_trials(1,:)))
     return %since no valid units skip analysis
 end
 disp([task_file ': running Saccade modulation anlaysis...'])
-
 
 load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],...
     'spatial_info','eyepos','spike_times','binsize','Fs','filter_width')
@@ -132,13 +130,13 @@ for unit = 1:num_units
     
     %---Calculate Firing Rate Locked to Saccades---%
     sac_in_out{unit} = NaN(1,3000); %firing rate for fixations inside or outside  of place field
-    saccade_aligned_firing{unit} = NaN(3000,(twinad1+twinad2)); %spike trains locked to fixations
+    saccade_aligned_firing{unit} = NaN(3000,(twinad1+twinad2)); %spike trains locked to saccade start
     saccade_directions{unit} = NaN(1,3000);%saccade directions
     saccade_amplitudes{unit} = NaN(1,3000);%saccade amplitudes
-    fixation_starts{unit} = NaN(1,3000);%start of prior fixation
-    fixation_ends{unit} = NaN(1,3000); %end of following fixation
+    fixation_starts{unit} = NaN(1,3000);%start of prior fixation relative to saccade start
+    fixation_ends{unit} = NaN(1,3000); %end of following fixation relative to saccade start
     
-    sac_ind = 1; %fixation # so can track in variables above
+    sac_ind = 1; %saccade # so can track in variables above
     for t = 1:num_trials
         if t >= valid_trials(1,unit) && t <= valid_trials(2,unit) %only valid trials for this unit
             if any(cfg.trl(t).allval == img_on_code) && itmlist(cfg.trl(t).cnd-1000) > sequence_items(end) %only want image trials
@@ -212,7 +210,6 @@ for unit = 1:num_units
                     end
                     saccade_amplitudes{unit}(sac_ind) = sacamp;
                     
-                    
                     prior_fix_in_out = NaN;
                     %determine if prior fixation was in or out of place field
                     fixx = fixations(1,prior_fix);
@@ -242,13 +239,14 @@ for unit = 1:num_units
                         else %out->in
                             sac_in_out{unit}(sac_ind) = 1;
                         end
-                    elseif all_place_field_matrix{unit}(fixy,fixx) == 0 %then inside, NaNs are for locations not analyzed
+                    elseif all_place_field_matrix{unit}(fixy,fixx) == 0 %then inside
                         if prior_fix_in_out == 1%prior fixation was inside so in->out
                             sac_in_out{unit}(sac_ind) = 3;
                         else %out->out
                             sac_in_out{unit}(sac_ind) = 4;
                         end
-                    else %not a valid fixation location too sparse of coverage to analyze
+                    else %not a valid fixation location too sparse of coverage to analyze,
+                        %NaNs are for locations not analyzed
                         continue
                     end
                     
@@ -260,7 +258,7 @@ for unit = 1:num_units
                     temp(sac_spikes) = 1;
                     saccade_aligned_firing{unit}(sac_ind,:) = temp;
                     
-                    %reflix y otherwise everything is flipped
+                    %reflip y otherwise direction gets flipped too
                     fixy = fixations(2,post_fix);
                     last_fixy = fixations(2,prior_fix);
                     saccade_directions{unit}(sac_ind) = atan2d(fixy-last_fixy,fixx-last_fixx);
@@ -286,9 +284,9 @@ fixation_ends = laundry(fixation_ends);
 
 %%
 %---Where to Store Direction Summary Data---%
-mrls.all_fixations = NaN(1,num_units); %MRLs all fixations ignoring out2in and in2out
-mrls.all_fixations_shuffled = cell(1,num_units); %shuffled MRLs all fixations ignoring out2in and in2out
-mrls.all_fixations_shuffled_prctile = NaN(1,num_units); %observed MRL percentile
+mrls.all_saccades = NaN(1,num_units); %MRLs all fixations ignoring out2in and in2out
+mrls.all_saccades_shuffled = cell(1,num_units); %shuffled MRLs all fixations ignoring out2in and in2out
+mrls.all_saccades_shuffled_prctile = NaN(1,num_units); %observed MRL percentile
 mrls.in2in = NaN(1,num_units);  %MRLs for in2in fixations ignoring all others
 mrls.in2in_shuffled = cell(1,num_units);  %shuffled MRLs for in2in fixations ignoring all others
 mrls.in2in_shuffled_prctile = NaN(1,num_units);  %observed MRLs percentile for in2in fixations ignoring all others
@@ -326,24 +324,26 @@ for unit = 1:num_units
     fix_ends = fixation_ends{unit};
     
     %---Remove Counfounding Eye Movements for Spatially Modulated Neurons---%
-    %take eye data from fixations in2in or out2out since in2out or out2in
+    %remove saccades in2in or out2out since in2out or out2in
     %could be biased by field location creating artificial direction tuning
-    % but only do this if spatial (both criterion)
+    %but only do this if spatial (both criterion)
     if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
-        sac_aligned = sac_aligned(sac_in_out{unit} == 2 | sac_in_out{unit} == 4,:); %fixations in2in or out2out
-        sac_dirs = sac_dirs(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for fixations in2in or out2out only
-        sac_amps = sac_amps(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for fixations in2in or out2out only
+        sac_aligned = sac_aligned(sac_in_out{unit} == 2 | sac_in_out{unit} == 4,:); %saccades in2in or out2out
+        sac_dirs = sac_dirs(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for saccades in2in or out2out only
+        sac_amps = sac_amps(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for saccades in2in or out2out only
         fix_starts = fix_starts((sac_in_out{unit} == 2 | sac_in_out{unit} == 4));
         fix_ends = fix_ends((sac_in_out{unit} == 2 | sac_in_out{unit} == 4));
     end
     
-    %also remove saccades that are too big since wont have many anyway
+    %also remove saccades that are too big since won't have many anyway
     sac_aligned_amp = sac_aligned;
     too_large = find(sac_amps > max_amplitude);
     sac_aligned_amp(too_large,:) = [];
     sac_amps(too_large)=[];
-    sac_fix_starts = fix_starts(~too_large);
-    sac_fix_ends = fix_ends(~too_large);
+    sac_fix_starts = fix_starts;
+    sac_fix_starts(too_large) = [];
+    sac_fix_ends = fix_ends;
+    sac_fix_ends(too_large) = [];
     
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -369,8 +369,8 @@ for unit = 1:num_units
     end
     
     %---Re-Estimate Direction Tuning More Accurately within Crude Window---%
-    %will improve estimate as some neurons will show prefered directions in the
-    %crude pre-selected directions above
+    %will improve estimate as some neurons will have prefered tuning
+    %directions in between the crude estimates above
     [mean_binned_firing_rate,degrees,~] = bin_directional_firing(bin_deg,sac_aligned,window,sac_dirs);
     [prefered_dirs,anti_prefered_dirs,~] = ...
         select_prefred_indeces(mean_binned_firing_rate,degrees,sac_dirs,smval_deg,bin_deg);%estimate prefered and anti-prefered directions
@@ -401,45 +401,49 @@ for unit = 1:num_units
             else
                 all_direction_windows{unit} = window;
             end
+            window_end = all_direction_windows{unit}(end)-twinad1;
         end
-        window_end = all_direction_windows{unit}(end)-twinad1;
         %remove fixations shorter than window as these could be
         %contaminated by the next saccade
         fixations_too_short = find(fix_ends < window_end);
         sac_dirs(fixations_too_short) = [];
         sac_aligned(fixations_too_short,:) = [];
+        fix_ends(fixations_too_short) = [];
+        fix_starts(fixations_too_short) = [];
     end
-    if window_start < twinad1
+    if window_start < twinad1-min_fix_dur
         fixations_too_short = find((twinad1+fix_starts) > window_start);
         sac_dirs(fixations_too_short) = [];
         sac_aligned(fixations_too_short,:) = [];
+        fix_ends(fixations_too_short) = [];
+        fix_starts(fixations_too_short) = [];
     end
     
     if ~isempty(all_direction_windows{unit})
         
         %---Calculate Observed Saccade Direction Tuning for All Fixations---%
+        window_width = length(all_direction_windows{unit});
         [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,sac_aligned,all_direction_windows{unit},sac_dirs);
-        mrls.all_fixations(unit) = mrl; %observed MRL
+        mrls.all_saccades(unit) = mrl; %observed MRL
         direction_binned_firing_rate_curves{1,unit} = mean_binned_firing_rate; %binned firing rates
         uniformity_pvalue(1,unit) = circ_rtest(sac_dirs*pi/180,sum(sac_aligned(:,all_direction_windows{unit}),2)*1000/window_width);
         %circ p_values may not be that useful since depends on firing rate and sample size
         
-        window_width = length(all_direction_windows{unit});
         spike_counts = sum(sac_aligned(:,all_direction_windows{unit}),2);
-        if sum(spike_counts)*1000/window_width/length(spike_counts) >= min_firing_rate
-            %sum(spike_counts > 0) > min_saccades_with_spikes*size(sac_aligned,1)
+        if sum(spike_counts > 0) > min_saccades_with_spikes*size(sac_aligned,1)
             
             %---Calculate Bootstrapped MRLs for All Fixations---%
             shuffled_mrls = NaN(1,numshuffs); %shuffled mrls
             this_window = all_direction_windows{unit};
+            spike_counts = sum(sac_aligned(:,this_window),2);
             parfor shuff = 1:numshuffs
                 ind = randperm(length(sac_dirs)); %shuffle indeces
                 dirs = sac_dirs(ind); %shuffled saccade directions
-                mrl = circ_r(dirs*pi/180,sum(sac_aligned(:,this_window),2)); %MRL for unbinned data
+                mrl = circ_r(dirs*pi/180,spike_counts); %MRL for unbinned data
                 shuffled_mrls(shuff) = mrl;
             end
-            mrls.all_fixations_shuffled{unit} = shuffled_mrls;
-            mrls.all_fixations_shuffled_prctile(unit) = 100*sum(mrls.all_fixations(unit) > shuffled_mrls)/numshuffs; %shuffled percentile
+            mrls.all_saccades_shuffled{unit} = shuffled_mrls;
+            mrls.all_saccades_shuffled_prctile(unit) = 100*sum(mrls.all_saccades(unit) > shuffled_mrls)/numshuffs; %shuffled percentile
             
             %---Saccade Direction across Fixations In2In or Out2Out---%
             %only run if spatial (both criterion) or possibly spatial (either criterion)
@@ -458,11 +462,15 @@ for unit = 1:num_units
                     fixations_too_short = find(fix_ends < window_end-twinad1);
                     dir_in_in(fixations_too_short) = [];
                     sac_in_in(fixations_too_short,:) = [];
+                    fix_ends(fixations_too_short) = [];
+                    fix_starts(fixations_too_short) = [];
                 end
-                if window_start < twinad1
+                if window_start < twinad1-min_fix_dur
                     fixations_too_short = find((twinad1+fix_starts) > window_start);
                     dir_in_in(fixations_too_short) = [];
                     sac_in_in(fixations_too_short,:) = [];
+                    fix_ends(fixations_too_short) = [];
+                    fix_starts(fixations_too_short) = [];
                 end
                 
                 %---Calculate Observed Saccade Direction Tuning for In2In Fixations---%
@@ -475,14 +483,15 @@ for unit = 1:num_units
                 
                 %---Calculate Bootstrapped MRLs for In2In Fixations---%
                 shuffled_mrls = NaN(1,numshuffs);
+                spike_counts = sum(sac_in_in(:,this_window),2);
                 parfor shuff = 1:numshuffs
                     ind = randperm(length(dir_in_in)); %shuffle indeces
                     dirs = dir_in_in(ind); %shuffled directions
-                    mrl = circ_r(dirs*pi/180,sum(sac_in_in(:,all_direction_windows{unit}),2)); %MRL for unbinned data
+                    mrl = circ_r(dirs*pi/180,spike_counts); %MRL for unbinned data
                     shuffled_mrls(shuff) = mrl;
                 end
                 mrls.in2in_shuffled{unit} = shuffled_mrls;
-                mrls.in2in_shuffled_prctile(unit) = 100*sum(mrls.all_fixations(unit) > shuffled_mrls)/numshuffs; %shuffled percentile
+                mrls.in2in_shuffled_prctile(unit) = 100*sum(mrls.in2in(unit) > shuffled_mrls)/numshuffs; %shuffled percentile
                 
                 %---Out2Out Fixations---%
                 sac_out_out = saccade_aligned_firing{unit}(sac_in_out{unit} == 4,:); %fixation aligned firing rate
@@ -497,11 +506,15 @@ for unit = 1:num_units
                     fixations_too_short = find(fix_ends < (window_end-twinad1));
                     dir_out_out(fixations_too_short) = [];
                     sac_out_out(fixations_too_short,:) = [];
+                    fix_ends(fixations_too_short) = [];
+                    fix_starts(fixations_too_short) = [];
                 end
-                if window_start < twinad1
+                if window_start < twinad1-min_fix_dur
                     fixations_too_short = find((twinad1+fix_starts) > window_start);
                     dir_out_out(fixations_too_short) = [];
                     sac_out_out(fixations_too_short,:) = [];
+                    fix_ends(fixations_too_short) = [];
+                    fix_starts(fixations_too_short) = [];
                 end
                 
                 %---Calculate Observed Saccade Direction Tuning for Out2Out Fixations---%
@@ -514,19 +527,20 @@ for unit = 1:num_units
                 
                 %---Calculate Bootstrapped MRLs for Out2Out Fixations---%
                 shuffled_mrls = NaN(1,numshuffs);
+                spike_counts = sum(sac_out_out(:,this_window),2);
                 parfor shuff = 1:numshuffs
                     ind = randperm(length(dir_out_out)); %shuffle indeces
                     dirs = dir_out_out(ind);%shuffled saccade directions
-                    mrl = circ_r(dirs*pi/180,sum(sac_out_out(:,all_direction_windows{unit}),2)); %MRL for unbinned data
+                    mrl = circ_r(dirs*pi/180,spike_counts); %MRL for unbinned data
                     shuffled_mrls(shuff) = mrl;
                 end
                 mrls.out2out_shuffled{unit} = shuffled_mrls;
-                mrls.out2out_shuffled_prctile(unit) = 100*sum(mrls.all_fixations(unit) > shuffled_mrls)/numshuffs;%shuffled perecentile
+                mrls.out2out_shuffled_prctile(unit) = 100*sum(mrls.out2out(unit) > shuffled_mrls)/numshuffs;%shuffled perecentile
             end
         else
             window_width = length(all_direction_windows{unit});
             [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,sac_aligned,all_direction_windows{unit},sac_dirs);
-            mrls.all_fixations(unit) = mrl; %observed MRL
+            mrls.all_saccades(unit) = mrl; %observed MRL
             direction_binned_firing_rate_curves{1,unit} = mean_binned_firing_rate; %binned firing rates
             uniformity_pvalue(1,unit) = circ_rtest(sac_dirs*pi/180,sum(sac_aligned(:,all_direction_windows{unit}),2)*1000/window_width);
             %circ p_values may not be that useful since depends on firing rate and sample size
@@ -652,10 +666,10 @@ for unit = 1:num_units
             polar(degrees,[smoothed_direction_curve(end) smoothed_direction_curve],'b')
             if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
                 %only ran if spatially modulated or possibly modulated (95% skaggs OR 95% corr 1/2)
-                title(sprintf(['All mrl: ' num2str(mrls.all_fixations(unit),2) ' (' num2str(mrls.all_fixations_shuffled_prctile(unit),3) '%%)'...
+                title(sprintf(['All mrl: ' num2str(mrls.all_saccades(unit),2) ' (' num2str(mrls.all_saccades_shuffled_prctile(unit),3) '%%)'...
                     ' \n In2In mrl: ' num2str(mrls.in2in(unit),2) ' (' num2str(mrls.in2in_shuffled_prctile(unit),3) '%%)']))
             else
-                title(sprintf(['All mrl: ' num2str(mrls.all_fixations(unit),2) ' (' num2str(mrls.all_fixations_shuffled_prctile(unit),3) '%%)']))
+                title(sprintf(['All mrl: ' num2str(mrls.all_saccades(unit),2) ' (' num2str(mrls.all_saccades_shuffled_prctile(unit),3) '%%)']))
             end
             
             %---Plots for Fixations Out2Out Only---%
@@ -724,82 +738,97 @@ for unit = 1:num_units
         end
         
     end
-    %%
+    
     save_and_close_fig(figure_dir,[task_file(1:end-11) '_' unit_stats{1,unit} '_Saccade_Direction_Analysis']);
     
-    continue
-    %%
-    %     window(window < start_window) = [];
-    %     window(window > end_window) = [];
-    %     if length(window) < min_window_width
-    %         window = [];
-    %     end    
-    %     %---For Saccade Amplitude---%
-    %     amps = [0:bin_amplitude2:18]+2;
-    %     amplitude_curves = NaN(length(amps),twinad1+twinad2);
-    %     for bin = 1:length(amps)-1
-    %         these_amplitudes = (sac_amps < amps(bin+1) & sac_amps >= amps(bin));
-    %         amplitude_curves(bin,:) = nandens(sac_aligned_amp(these_amplitudes,:),smval,'gauss',Fs)-fr;
-    %     end
-    %     mean_of_amplitude_curves = nanmean(fr);
-    %     crude_amplitude_amplitude_curves = amplitude_curves; %save for later
-    %     small = prctile(sac_amps,20);
-    %     small = nandens(sac_aligned(sac_amps <= small,:),smval,'gauss',Fs);
-    %     large = prctile(sac_amps,80);
-    %     large = nandens(sac_aligned(sac_amps >= large,:),smval,'gauss',Fs);
-    %     amp_diff = large-small;
-    %     if abs(min(amp_diff)) > max(amp_diff)
-    %         [min_tuning,min_tuning_ind] = min(amp_diff(start_window:end_window));
-    %         max_tuning_ind = max_tuning_ind+99;
-    %         large_ind = find(amp_diff < min_tuning/2);%1/2 max
-    %     else
-    %         [max_tuning,max_tuning_ind] = max(amp_diff(start_window:end_window));
-    %         max_tuning_ind = max_tuning_ind+99;
-    %         large_ind = find(amp_diff > max_tuning/2);%1/2 max
-    %     end
-    %     gaps = findgaps(large_ind);
-    %     window = [];
-    %     for g =1:size(gaps,1)
-    %         gp = gaps(g,:);
-    %         gp(gp == 0) = [];
-    %         if any(gp == max_tuning_ind)
-    %             window = gp;
-    %             break
-    %         end
-    %     end
-    %     if isempty(window)
-    %         window = 100:twinad1+twinad2-168;%just use whole window
-    %     else
-    %         if length(window) < min_window_width
-    %             if max_tuning_ind < min_window_width/2
-    %                 extra =  min_window_width-length(window);
-    %                 window = 1:window(end)+extra;
-    %             elseif  max_tuning_ind >  twinad1+twinad2-min_window_width
-    %                 extra = twinad1+twinad2-min_window_width;
-    %                 window = extra:twinad1+twinad2;
-    %             else
-    %                 window = max_tuning_ind-min_window_width/2:max_tuning_ind+min_window_width/2;
-    %             end
-    %         end
-    %     end
-    %     %if more than half of the window is outside the good zones then remove it
-    %     if sum(window < 100) > length(window)/2
-    %         window = [];
-    %     elseif sum(window > twinad1+188+44) > length(window)/2
-    %         window = [];
-    %     end
-    %     all_amplitude_windows{unit} = window;
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %--Saccade Amplitude Anlaysis---%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    amps = [0:bin_amplitude2:18]+2;
+    amplitude_curves = NaN(length(amps),twinad1+twinad2);
+    for bin = 1:length(amps)-1
+        these_amplitudes = (sac_amps < amps(bin+1) & sac_amps >= amps(bin));
+        amplitude_curves(bin,:) = nandens(sac_aligned_amp(these_amplitudes,:),smval,'gauss',Fs)-fr;
+    end
+    crude_amplitude_amplitude_curves = amplitude_curves; %save for later
+    small = prctile(sac_amps,20);
+    small = nandens(sac_aligned_amp(sac_amps <= small,:),smval,'gauss',Fs);
+    large = prctile(sac_amps,80);
+    large = nandens(sac_aligned_amp(sac_amps >= large,:),smval,'gauss',Fs);
+    amp_diff = large-small;
+    if abs(min(amp_diff(start_window:end_window))) > max(amp_diff(start_window:end_window))
+        [min_tuning,max_tuning_ind] = min(amp_diff(start_window:end_window));
+        max_tuning_ind = max_tuning_ind+start_window-1;
+        large_ind = find(amp_diff < min_tuning/2);%1/2 max
+    else
+        [max_tuning,max_tuning_ind] = max(amp_diff(start_window:end_window));
+        max_tuning_ind = max_tuning_ind+start_window-1;
+        large_ind = find(amp_diff > max_tuning/2);%1/2 max
+    end
+    gaps = findgaps(large_ind);
+    window = [];
+    for g =1:size(gaps,1)
+        gp = gaps(g,:);
+        gp(gp == 0) = [];
+        if any(gp == max_tuning_ind)
+            window = gp;
+            break
+        end
+    end
+    if ~isempty(window)
+        all_amplitude_windows{unit} = window;
+    else
+         all_amplitude_windows{unit} = start_window:end_window;
+    end
+    
+    %---Modify Window if Necessary based on Fixation Durations and Remove Fixation Durations that are too Short---%
+    window_width = length(all_amplitude_windows{unit});
+    window_end = all_amplitude_windows{unit}(end);
+    window_start = all_amplitude_windows{unit}(1);
+    if window_end > end_window
+        window_end = window_end-twinad1;
+        median_fixation_dur = median(sac_fix_ends);
+        %if more than half the fixations are shorter than window length
+        %cut window down to median fixation duration othwerise we will just
+        %cut fixations shorter than window end
+        if median_fixation_dur < window_end
+            window = all_amplitude_windows{unit};
+            window(window > median_fixation_dur+twinad1) = [];
+            if length(window) < min_window_width;
+                all_amplitude_windows{unit} = [];
+            else
+                all_amplitude_windows{unit} = window;
+            end
+            window_end = all_amplitude_windows{unit}(end)-twinad1;
+        end
+        %remove fixations shorter than window as these could be
+        %contaminated by the next saccade
+        fixations_too_short = find(sac_fix_ends < window_end);
+        sac_amps(fixations_too_short) = [];
+        sac_aligned_amp(fixations_too_short,:) = [];
+        sac_fix_ends(fixations_too_short) = [];
+        sac_fix_starts(fixations_too_short) = [];
+    end
+    if window_start < twinad1-min_fix_dur
+        fixations_too_short = find((twinad1+sac_fix_starts) > window_start);
+        sac_amps(fixations_too_short) = [];
+        sac_aligned_amp(fixations_too_short,:) = [];
+        sac_fix_ends(fixations_too_short) = [];
+        sac_fix_starts(fixations_too_short) = [];
+    end
+
     %---Saccade Amplitude Analysis---%
     spike_counts = sum(sac_aligned_amp(:,all_amplitude_windows{unit}),2);
-    if sum(spike_counts > 0) >  min_saccades_with_spikes*size(sac_aligned,1)
+    if sum(spike_counts > 0) >  min_saccades_with_spikes*size(sac_aligned_amp,1)
         firing_rates = sum(sac_aligned_amp(:,all_amplitude_windows{unit}),2)*1000/window_width;
         [amps,amplitude_binned_firing_rate_curves{unit}] =  amplitude_bin_firing(sac_amps,firing_rates,bin_amplitude,max_amplitude);
         shuffled_corrs = NaN(1,numshuffs); %shuffled correlations
         parfor shuff = 1:numshuffs
             ind = randperm(length(sac_amps)); %shuffle indeces
             shuffled_sac_amps = sac_amps(ind); %shuffled saccade amplitudes
-            [amps,bfrc] = amplitude_bin_firing(shuffled_sac_amps,firing_rates,bin_amplitude,max_amplitude);
-            shuffled_corrs(shuff) = corr(bfrc(2:end)',amps(2:end)','row','pairwise','type','Spearman');
+            [amps2,bfrc] = amplitude_bin_firing(shuffled_sac_amps,firing_rates,bin_amplitude,max_amplitude);
+            shuffled_corrs(shuff) = corr(bfrc(2:end)',amps2(2:end)','row','pairwise','type','Spearman');
         end
         
         amplitude_correlations(unit) = corr(amplitude_binned_firing_rate_curves{unit}',amps','row','pairwise','type','Spearman');%observed value
@@ -808,16 +837,15 @@ for unit = 1:num_units
     else
         firing_rates = sum(sac_aligned_amp(:,all_amplitude_windows{unit}),2)*1000/window_width;
         [amps,amplitude_binned_firing_rate_curves{unit}] =  amplitude_bin_firing(sac_amps,firing_rates,bin_amplitude,max_amplitude);
+        amplitude_correlations(unit) = corr(amplitude_binned_firing_rate_curves{unit}',amps','row','pairwise','type','Spearman');%observed value
         disp('Too sparse')
     end
     
-    %%%%%%%%%%%%%%%%%%%%%
-    %%%---Make Plot---%%%
-    %%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%---Saccade Amplitude Plots---%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    %----Saccade Amplitude---%
-    
-    
+    %----Saccade Amplitude---%    
     figure
     
     %---Saccade Aligned Firing Rate Curve--%
@@ -957,7 +985,7 @@ save([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'],.
 end
 
 function [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,saccade_aligned_firing,time_window,saccade_directions)
-%smooth data, binned into 1 degree bins
+%bin data into small degree bins
 degrees = [0:bin_deg:360]-180;
 binned_firing_rate = cell(1,length(degrees));
 for bins = 2:length(degrees)
@@ -968,9 +996,9 @@ degrees = degrees(2:end);
 degrees = degrees*pi/180;
 degrees = [degrees degrees(1)];
 mean_binned_firing_rate = cellfun(@nanmean,binned_firing_rate(2:end));
-mrl = circ_r(saccade_directions*pi/180,sum(saccade_aligned_firing(:,time_window),2)); %for unbinned data
+mrl = circ_r(saccade_directions*pi/180,sum(saccade_aligned_firing(:,time_window),2)); %MRL for unbinned data
 
-%NOT rechecked for bugs 1/17/2017 SDK
+%NOT rechecked for bugs since currently not used
 %binned data
 % degrees = [0:3:360]-180; %binned degrees
 % binned_firing_rate = cell(1,length(degrees));
@@ -988,10 +1016,11 @@ mrl = circ_r(saccade_directions*pi/180,sum(saccade_aligned_firing(:,time_window)
 end
 
 function [prefered_dirs,anti_prefered_dirs,smoothed_firing] = select_prefred_indeces(binned_firing,binned_directions,dirs,smval,bin_size)
-bf = [binned_firing(end-(3*smval):end) binned_firing binned_firing(1:3*smval)];%so don't get edege artifacts
+orginal_dirs = dirs; %store for later since may be modifying dirs variable
+bf = [binned_firing(end-(3*smval):end) binned_firing binned_firing(1:3*smval)];%buffer so don't get edege artifacts from filtering
 binned_firing = nandens(bf,smval,'gauss',1); %smooth to display firing rate by saccade direction
 binned_firing = binned_firing(3*smval+2:end-3*smval);%remove buffers
-smoothed_firing = binned_firing;
+smoothed_firing = binned_firing;%for output
 
 %---Calculate Prefered Direction---%
 %over smoothed so small peaks don't interfer detecting prefered direction
@@ -999,17 +1028,31 @@ binned_firing2 = nandens(bf,3*smval,'gauss',1);
 binned_firing2 = binned_firing2(3*smval+2:end-3*smval);%remove buffers
 prefered_index = find((binned_firing2(1:end-1) == max(binned_firing2(1:end-1))));
 prefered_index = prefered_index(1);
-prefered_direction = 180/pi*binned_directions(binned_firing2(1:end-1) == max(binned_firing2(1:end-1)));%highest firing rate
-prefered_direction = prefered_direction(1);%if multiple just pick 1
-dirs2 = dirs; %store for later since may be modifying dirs variable
+prefered_direction = 180/pi*binned_directions(prefered_index);%highest firing rate
 
+%---Calculate Anti-prefered Direction---%
+%over smoothed so small peaks don't interfer detecting prefered direction
+binned_firing2 = nandens(bf,3*smval,'gauss',1);
+binned_firing2 = binned_firing2(3*smval+2:end-3*smval);%remove buffers
+anti_index = find(binned_firing2(1:end-1) == min(binned_firing2(1:end-1)));
+anti_index = anti_index(1);
+anti_prefered_direction = 180/pi*binned_directions(anti_index); %lowest firing rate
+
+%---Calculate FWHM for Prefered Direction---%
 binned_firing2 = binned_firing-mean(binned_firing);
 if abs(prefered_direction) > 90
+    %rotate axis if prefered direction is near window edge
     zeroind = find(binned_directions == 0);
     binned_firing2 = [binned_firing2(zeroind:end) binned_firing2(1:zeroind-1)];
-    prefered_index = find((binned_firing2(1:end-1) == max(binned_firing2(1:end-1))));
+    
+    binned_firing3 = nandens(bf,3*smval,'gauss',1);
+    binned_firing3 = binned_firing3(3*smval+2:end-3*smval);%remove buffers
+    binned_firing3 = [binned_firing3(zeroind:end) binned_firing3(1:zeroind-1)];
+    prefered_index = find((binned_firing3(1:end-1) == max(binned_firing3(1:end-1))));
     prefered_index = prefered_index(1);
 end
+
+binned_firing2 = binned_firing2-mean(binned_firing2);
 large_ind = find(binned_firing2 > binned_firing2(prefered_index)/2);%1/2 the max
 gaps = findgaps(large_ind);
 window = [];
@@ -1024,34 +1067,21 @@ end
 deg_win = length(window)/2*bin_size;
 if deg_win < 15
     deg_win = 15;
-elseif deg_win > 45 
+elseif deg_win > 45
     deg_win = 45;
 end
 
-if prefered_direction > 180-deg_win %will have to look at negative angles too
-    dirs(dirs < 0) = dirs(dirs < 0)+360;
-elseif prefered_direction < -180-deg_win
-    prefered_direction = prefered_direction+360;
-    dirs(dirs < 0) = dirs(dirs < 0)+360;
-else
-    dirs = dirs;
-end
-prefered_dirs = find((dirs <= prefered_direction+30)& (dirs >= prefered_direction-30));
-
-%---Calculate Anti-prefered Direction---%
-binned_firing = binned_firing(3*smval+2:end-3*smval);%remove buffers
-%over smoothed so small peaks don't interfer detecting prefered direction
-binned_firing2 = nandens(bf,2*smval,'gauss',1);%over smooth since probably noisier
-binned_firing2 = binned_firing2(3*smval+2:end-3*smval);%remove buffers
-anti_prefered_direction = 180/pi*binned_directions(binned_firing2(1:end-1) == min(binned_firing2(1:end-1))); %lowest firing rate
-anti_index = find(binned_firing2(1:end-1) == min(binned_firing2(1:end-1)));
-anti_index = anti_index(1);
-anti_prefered_direction = anti_prefered_direction(1);%if multiple just pick 1
-
+%---Calculate FWHM for Anti-Prefered Direction---%
 if abs(anti_prefered_direction) > 90
+    %rotate axis if anti-prefered direction is near window edge
     zeroind = find(binned_directions == 0);
     binned_firing2 = [binned_firing2(zeroind:end) binned_firing2(1:zeroind-1)];
-    prefered_index = find((binned_firing2(1:end-1) == min(binned_firing2(1:end-1))));
+    
+    binned_firing3 = nandens(bf,3*smval,'gauss',1);
+    binned_firing3 = binned_firing3(3*smval+2:end-3*smval);%remove buffers
+    binned_firing3 = [binned_firing3(zeroind:end) binned_firing3(1:zeroind-1)];
+    anti_index = find(binned_firing3(1:end-1) == min(binned_firing3(1:end-1)));
+    anti_index  = anti_index(1);
 end
 
 binned_firing2 = binned_firing2-mean(binned_firing2);
@@ -1067,27 +1097,38 @@ for g =1:size(gaps,1)
     end
 end
 deg_win_anti = length(window)/2*bin_size;
-deg_win_anti(deg_win_anti < deg_win) = deg_win;
-if deg_win_anti > 45 
+if deg_win_anti < 15
+    deg_win_anti = 15;
+elseif deg_win_anti > 45
     deg_win_anti = 45;
 end
 
-deg_win = deg_win_anti;
-dirs = dirs2;%restore dirs variable since may have just modifid above
-if anti_prefered_direction > 180-deg_win %will have to look at negative angles too
+%---Select Directions in Prefered Direction---%
+if prefered_direction > 180-deg_win %will have to look at negative angles too
     dirs(dirs < 0) = dirs(dirs < 0)+360;
-elseif anti_prefered_direction < -180-deg_win
+elseif prefered_direction < -180+deg_win
+    prefered_direction = prefered_direction+360;
+    dirs(dirs < 0) = dirs(dirs < 0)+360;
+else
+    dirs = dirs;
+end
+prefered_dirs = find((dirs <= prefered_direction+deg_win)& (dirs >= prefered_direction-deg_win));
+
+%---Select Directions in Anti-Prefered Direction---%
+dirs = orginal_dirs;%restore dirs variable since may have just modifid above
+if anti_prefered_direction > 180-deg_win_anti %will have to look at negative angles too
+    dirs(dirs < 0) = dirs(dirs < 0)+360;
+elseif anti_prefered_direction < -180+deg_win_anti
     anti_prefered_direction = anti_prefered_direction+360;
     dirs(dirs < 0) = dirs(dirs < 0)+360;
 else
     dirs = dirs;
 end
-anti_prefered_dirs = find((dirs <= anti_prefered_direction+deg_win)& (dirs >= anti_prefered_direction-deg_win));
-
+anti_prefered_dirs = find((dirs <= anti_prefered_direction+deg_win_anti)& (dirs >= anti_prefered_direction-deg_win_anti));
 end
 
+
 function [amps,binned_firing_rates] = amplitude_bin_firing(sacamps,firing_rates,bin_amplitude,max_amplitude)
-%%
 amps = [2:bin_amplitude:max_amplitude];
 binned_firing_rates = NaN(1,length(amps));
 for bin = 1:length(amps)-1

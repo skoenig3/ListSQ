@@ -85,8 +85,8 @@ for monkey = 2:-1:1
         end
         
         disp(task_file(1:8))
-        if exist([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat'],'file') %want to remove later
-            load([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat'])
+        if exist([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'],'file') %want to remove later
+            load([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'])
             load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info')
             load([data_dir  task_file(1:8) '-Eyemovement_Locked_List_results.mat'],'fixation_information');
         else
@@ -137,18 +137,23 @@ disp([num2str(sum(all_corrs_pctiles > 97.5)) ' amplitude modulated cells'])
 disp('--------------------------------------------------------------')
 disp([num2str(sum(all_corrs_pctiles > 97.5 & spatialness == 1)) ' amplitude modulated place cells'])
 disp([num2str(sum(all_corrs_pctiles > 97.5 & spatialness == 0)) ' amplitude modulated non-place cells '])
+disp('--------------------------------------------------------------')
+disp([num2str(sum(~isnan(all_corrs_pctiles))) ' in total analyzed'])
+disp([num2str(sum((~isnan(all_corrs_pctiles) & (spatialness == 1)))) ' place cells analyzed'])
+disp([num2str(sum((~isnan(all_corrs_pctiles) & (spatialness == 0)))) ' non-place cells analyzed'])
+
 %%
 %%---Copy Relevant Figures to Summary Directory---%
-% for unit = 1:length(all_unit_names)
-%     if all_corrs_pctiles(unit) > 97.5
-%         sub_dir1 = 'Saccade Amplitude\';
-%         name1 = [all_unit_names{unit} '_Saccade_Amplitude_Analysis.png'];
-%         if spatialness(unit) == 1 %place cell
-%             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
-%                 [summary_directory 'Place\' name1])
-%         elseif spatialness(unit) == 0 %non place cell
-%             copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
-%                 [summary_directory 'Non Place\' name1])
-%         end
-%     end
-% end
+for unit = 1:length(all_unit_names)
+    if all_corrs_pctiles(unit) > 97.5
+        sub_dir1 = '\Saccade Direction and Amplitude\';
+        name1 = [all_unit_names{unit} '_Saccade_Amplitude_Analysis.png'];
+        if spatialness(unit) == 1 %place cell
+            copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
+                [summary_directory 'Place\' name1])
+        elseif spatialness(unit) == 0 %non place cell
+            copyfile([figure_dir{all_monkeys(unit)} sub_dir1 name1],...
+                [summary_directory 'Non Place\' name1])
+        end
+    end
+end

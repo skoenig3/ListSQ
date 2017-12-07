@@ -115,7 +115,7 @@ for monkey = 2:-1:1
         end
         LFPchannels(bad_channels) = NaN;
         
-        for unit = 4% 1:num_units
+        for unit = 1:num_units
             if nansum(nansum(fixation_locked_firing{unit})) > 100
                 if temporal_info.fixation.shuffled_temporalstability_prctile(1,unit) > 95  %1st 2nd half corr
                              
@@ -166,7 +166,13 @@ for monkey = 2:-1:1
                     
                     spike_phase = cell(1,twin1+twin2);
                     saccade_num = cell(1,twin1+twin2);
+                    saccade_aligned_phase = cell(1,32);
+                    for freq = 1:32
+                        saccade_aligned_phase{freq} = NaN(2000,twin1+twin2);
+                    end
+                    saccade_aligned_LFP = NaN(2000,twin1+twin2);
                     count = 0;
+                    fixcount = 1;
                     for f = 1:length(fixation_information{unit})
                         if fixation_information{unit}(f,4) > image_on_twin;
                             if sum(fixation_locked_firing{unit}(f,:)) > 0 %there were spikes
@@ -174,6 +180,14 @@ for monkey = 2:-1:1
                                 spks = find(fixation_locked_firing{unit}(f,:));
                                 sac_num = fixation_information{unit}(f,3);
                                 t0 = fixation_information{unit}(f,2)-twin1-1;
+                                fixt = fixation_information{unit}(f,2);
+                                if fixt+twin2 < length(LFPs{trial})
+                                    saccade_aligned_LFP(fixcount,:) = LFPs{trial}(fixt-twin1:fixt+twin2-1);
+                                    for freq = 1:32
+                                        saccade_aligned_phase{freq}(fixcount,:) =LFP_phase{trial}(freq,fixt-twin1:fixt+twin2-1);
+                                    end
+                                    fixcount = fixcount+1;
+                                end
                                 for s = 1:length(spks);
                                     tind = spks(s)+t0;
                                     spike_phase{spks(s)} = [spike_phase{spks(s)} LFP_phase{trial}(:,tind,:)];

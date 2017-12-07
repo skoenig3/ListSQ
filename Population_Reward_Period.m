@@ -71,14 +71,21 @@ for monkey = 1:2
         for unit = 1:num_units
             if ~isempty(time_locked_firing{unit})
                 if (temporal_info.rate_prctile(unit) > 95) && (temporal_info.temporalstability_prctile(1,unit) > 95)
-                    firing_rate = time_locked_firing{unit}(:,1:1100);
+                    firing_rate = time_locked_firing{unit};
                     [firing_rate,~]= nandens(firing_rate,smval,'gauss',Fs,'nanflt');%going to smooth slightl lesss than before
-                    firing_rate = firing_rate-nanmean(firing_rate(:,1:twin));
-                    if max(firing_rate) > abs(min(firing_rate)) %normalize to max
-                        firing_rate = firing_rate/max(abs(firing_rate));
-                    else%normalize to min %could have some neurons that only show supression
-                        firing_rate = firing_rate/min(firing_rate);
+                    if mean(firing_rate(1:twin)) > mean(firing_rate(twin:end))
+                        firing_rate = firing_rate-nanmean(firing_rate(twin:end));%maintains that first part is higher
+                    else
+                        firing_rate = firing_rate-nanmean(firing_rate(1:twin));
                     end
+                    firing_rate = firing_rate/max(firing_rate);
+
+%                     firing_rate = firing_rate-nanmean(firing_rate(:,1:twin));
+%                     if max(firing_rate) > abs(min(firing_rate)) %normalize to max
+%                         firing_rate = firing_rate/max(abs(firing_rate));
+%                     else%normalize to min %could have some neurons that only show supression
+%                         firing_rate = firing_rate/min(firing_rate);
+%                     end
                     Reward_firing = [Reward_firing ; firing_rate];
                     
                     %is unit spatially modulated
@@ -114,6 +121,10 @@ for monkey = 1:2
     end
 end
 %% All Cells Aligned to Max
+vals = Reward_firing(:);
+vals(vals > 0) = [];
+
+
 figure
 
 subplot(1,2,1)
@@ -125,7 +136,7 @@ title('Population Average')
 subplot(1,2,2)
 [m,i] = max(Reward_firing,[],2);
 [mm,ii] = sort(i);
-imagesc([-twin:reward_dur+twin-1],[1:size(Reward_firing,1)],Reward_firing(ii,:))
+imagesc([-twin:reward_dur],[1:size(Reward_firing,1)],Reward_firing(ii,:))
 colormap('jet')
 hold on
 plot([0 0],[1 size(Reward_firing,1)],'w--');
@@ -134,4 +145,5 @@ xlabel('Time from Reward start  (ms)')
 ylabel('Neuron #')
 title('Reward Period')
 names = all_unit_names(ii);
+caxis([-std(vals) 1])
 

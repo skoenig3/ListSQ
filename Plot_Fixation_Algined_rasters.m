@@ -1,5 +1,5 @@
 % %% recreate plots so can pull them into illustrator
-% 
+%
 %% Just List
 
 
@@ -7,8 +7,8 @@
 %
 data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
 
-task_file = 'TO160318_3';
-unit_name = 'sig001a';
+task_file = 'TO160105';
+unit_name = 'sig003a';
 
 load([data_dir  task_file(1:8) '-Place_Cell_Analysis.mat']);
 
@@ -96,23 +96,23 @@ title(['Peak Firing Rate of ' num2str(pks,3) ' Hz at ' num2str(locs-twin1) ' ms'
 axis square
 %%
 %% List vs Sequence Analysis
-% 
+%
 % clar
 % data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
 % %data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
-% 
+%
 % task_file = 'TO160318_3';
 % unit_name = 'sig003a';
-% 
+%
 % % load([data_dir  task_file '-preprocessed.mat'],'cfg','item_file','cnd_file');
 % load([data_dir  task_file(1:8) '-Place_Cell_Analysis.mat']);
 % load([data_dir  task_file(1:8) '_3-spatial_analysis_results.mat']);
 % load([data_dir  task_file(1:8) '_3-preprocessed.mat'],'item_file','cnd_file');
 % [~,~,sequence_locations] = read_ListSQ_itm_and_cnd_files(item_file,cnd_file);
-% 
+%
 % H = define_spatial_filter(filter_width);
-% 
-% 
+%
+%
 % this_unit = [];
 % for unit = 1:size(unit_stats,2)
 %     if strcmpi(unit_stats{1,unit},unit_name)
@@ -122,10 +122,10 @@ axis square
 % end
 % imageX = 800;
 % imageY = 600;
-% 
+%
 % firing_rate_map = get_firing_rate_map({eyepos{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all'); %get firing rate map
 % maxfr = prctile(firing_rate_map(:),97.5);
-% 
+%
 % figure
 % %---plot firing rate map for all images---%
 % h = imagesc(firing_rate_map);
@@ -137,7 +137,7 @@ axis square
 % colormap('jet')
 % clim = caxis;
 % caxis([clim(1) maxfr])
-% 
+%
 % this_unit = [];
 % for unit = 1:size(unit_stats,2)
 %     if strcmpi(unit_stats{1,unit},unit_name)
@@ -145,15 +145,15 @@ axis square
 %         break
 %     end
 % end
-% 
+%
 % fix_locked_firing = list_fixation_locked_firing{this_unit};
 % fix_in_out = in_out{this_unit};
 % t = -twin1:twin2-1;
-% 
+%
 % num_in = sum(fix_in_out == 1);
 % num_out = sum(fix_in_out == 4);
 % downsample = floor(num_out/num_in)/2; %many more fixations outside so downsample to show ~equal number
-% 
+%
 % place_field_matrix = all_place_field_matrix{unit};
 % %Determine if any of the items are inside the matrix or not?
 % sequence_inside = NaN(2,4);
@@ -161,7 +161,7 @@ axis square
 %     for seq = 1:2
 %         yloc = imageY-sequence_locations{seq}(2,c);
 %         xloc = sequence_locations{seq}(1,c);
-%         
+%
 %         %---Simple version...is item in or out of field---%
 %         %             if place_field_matrix(yloc,xloc) == 1 %item is in field
 %         %                 sequence_inside(seq,c) = 1;
@@ -170,7 +170,7 @@ axis square
 %         %             else %coverage unknown
 %         %                 sequence_inside(seq,c) = NaN;
 %         %             end
-%         
+%
 %         %---Less Simple Version...is item on border of field---%
 %         if place_field_matrix(yloc,xloc) == 1 %item is in field
 %             %then check if item is on border of field, if yes don't
@@ -199,7 +199,7 @@ axis square
 %         end
 %     end
 % end
-% 
+%
 % figure
 % hold on
 % [~,~,~,y_list,~] = dofill(t,fix_locked_firing(fix_in_out == 1,:),'red',1,smval);%out-> in
@@ -226,11 +226,11 @@ axis square
 % %     ', n_{out->out} = ' num2str(sum(fix_in_out == 4))]));
 % title(['Peak Firing Rate of ' num2str(pks,3) ' Hz at ' num2str(locs-twin1) ' ms'])
 % axis square
-% 
+%
 % %---Plot Place Field---%
 % colors = 'rg';
 % shapes = 'xo';
-% 
+%
 % figure
 % imagesc(all_place_field_matrix{unit});
 % colormap('gray')
@@ -248,8 +248,8 @@ axis square
 % axis equal
 % axis off
 % title(sprintf(['Place Field Location \n Area = ' num2str(area(unit),2) '%%']));
-% 
-% 
+%
+%
 % %---Plot Firing Rate Curves for Suquence Trials---%
 % which_sequence = all_which_sequence{unit};
 % seq_in_out = [];
@@ -267,7 +267,7 @@ axis square
 %         end
 %     end
 % end
-% 
+%
 % figure
 % hold on
 % dofill(t,fixation_firing(in_out_sequence{unit} == 1,:),'red',1,smval);
@@ -289,9 +289,9 @@ axis square
 %     title(['Sequence Trials: No peak, max firing of ' num2str(max(seq_in_curve),3) 'Hz']);
 % end
 % hold off
-% 
-% 
-% 
+%
+%
+%
 % %---Plot Firing Rate Curves for Suquence vs Image Trials---%
 % figure
 % hold on
@@ -307,7 +307,7 @@ axis square
 % xlabel('Time from Fixation Start (ms)')
 % ylabel('Firing Rate (Hz)')
 % legend('Images','Sequences','Location','NorthWest')
-% 
+%
 % if stats_across_tasks(2,unit) > stats_across_tasks(4,unit)
 %     title(['Contextual Gain: ' num2str(100*(stats_across_tasks(2,unit)/stats_across_tasks(4,unit)),3) '%'])
 % else
@@ -322,31 +322,35 @@ clar
 data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
 %data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
 
-% direction tuned place cell 1
-% task_file = 'TO151208_3';
-% unit_name = 'sig001a';
+%presaccaddic non-place neuron
+% task_file = 'PW141031';
+% unit_name = 'sig004a';
 
-%diretion tuned place cell 2
+
+%peri-saccadic place cell
 % task_file = 'TO160108_3';
 % unit_name = 'sig003b';
+
+%peri-saccadic non-place cell
+% task_file = 'TO160105';
+% unit_name = 'sig004b';
+
+%post-saccadic non-place cell direction tuning 2
+% task_file = 'TO151204_3';
+% unit_name = 'sig002b';
+
+%post-saccadic direction tuned place cell 1
+% task_file = 'TO151208_3';
+% unit_name = 'sig001a';
 
 %non direction tuned place cell
 % task_file = 'TO160209_3';
 % unit_name = 'sig001a';
 
-%non-place cell direction tuning 1
-task_file = 'TO160105';
-unit_name = 'sig004b';
-
-%non-place cell direction tuning 2
-% task_file = 'TO151204_3';
-% unit_name = 'sig002b';
-
-
 
 
 load([data_dir  task_file(1:8) '_3-spatial_analysis_results.mat']);
-load([data_dir  task_file(1:8) '-Saccade_Direction_Analysis.mat']);
+load([data_dir  task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat']);
 load([data_dir  task_file(1:8) '-Place_Cell_Analysis.mat']);
 
 H = define_spatial_filter(filter_width);
@@ -359,93 +363,162 @@ for unit = 1:size(unit_stats,2)
     end
 end
 
-imageX = 800;
-imageY = 600;
-bin_deg = 1; %number of degrees per bin
+%---generic parameters---%
+imageX = 800; %horizontal image size
+imageY = 600; %vertical image size
+image_on_twin = 500;%don't use data within 500 ms of fixation onset due to strong visual response
+min_window_width = 50; %time around peak to take for firing rate, based on FWHM of place cell fixation analysis
+numshuffs = 10000; %number of times to shuffled/permutate saccade direction analysis
+min_blks = 2; %only analyzes units with at least 2 novel/repeat blocks (any block/parts of blocks)
+ITIstart_code = 15; %start of ITI/trial
+img_on_code = 23; %image turned on
+img_off_code = 24; %image turned off
+smval = 30 ;%15 ms std, want to smooth at high frequency modulations
+min_fix_dur = 100; %100 ms, don't want fixations that are too short since won't get a good idea of firing pattern
+min_sac_amp = 48;%48 pixels = 2 dva, don't want mini/micro saccades too small and hard to detect
+min_saccades_with_spikes = 0.05;% 5% to remove neurons that have basically no activity since they pass too :(...
+%essentially 0.4 Hz threshold if window is 50 ms in wide
+
+%---saccade direction and amplitude parameters---%
+bin_deg = 3;%1 %number of degrees per bin
 bin_deg2 = 45; %initial degree bins to determine time of peak direction modualtion
-smval_deg = 18; %9 degrees std
-smval = 30; %smoothing in time
+smval_deg = 6;%18 %9 degrees std
+bin_amplitude = 2; %dva for calculating saccade amplitude tuning
+bin_amplitude2 = 4;%dva for estimating window of interest
+max_amplitude = 16;%dva, approximately 95th percentile, don't have many large ones so remove
+
+twinad1 = 200;%presaccade window
+twinad2 = 400;%pos saccade window
+median_sac_dur = 44;
+tm = -twinad1+1:twinad2;
+start_window = twinad1-min_fix_dur;%how early before saccade can you look for direction tuning
+end_window = twinad1+min_fix_dur+median_sac_dur;%how late after saccade can you look for direction tuning,
+%some neurons have large latencies
+
 
 degrees = [0:bin_deg:360]-180;
-egrees = degrees(2:end);
+degrees = degrees(2:end);
 degrees = degrees*pi/180;
-% degrees = [degrees degrees(1)];
+degrees = [degrees degrees(1)];
 
-fix_aligned = list_fixation_locked_firing{unit}; %fixation aligned firing rate
-sac_dirs = saccade_direction{unit}; %saccade directions organized the same way as fix_algined
-fr = nandens(fix_aligned,smval,'gauss',1000,'nanflt'); %firing rate curve aligned to fixations
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%---Grab Saccade Aligned Activity--%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sac_aligned = saccade_aligned_firing{unit}; %fixation aligned firing rate
+sac_dirs = saccade_directions{unit}; %saccade directions organized the same way as sac_algined
+sac_amps = saccade_amplitudes{unit}/24; %saccade amplitudes organized the same way as sac_algined
+fix_starts = fixation_starts{unit};
+fix_ends = fixation_ends{unit};
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%---Method 2: Determine time window of interest based on Time of Peak Firing Rate Modulation---%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%prefered since we currently assume most units show a preference for
-%certain stimulus features at a particular time relative to eye
-%movements. Method simply finds the maximum firing rate deviation from
-%the mean when we bin the firing rate curves into arbitrary directions.
-%Note: the exact bins are not important for this method just to remove
-%the anti-prefered direction since this seems to often cause inhbition.
-degrees2 = [0:bin_deg2:360]-180;
-curves = NaN(length(degrees2),twin1+twin2);
-for bin = 2:length(degrees2)
-    these_directions = (sac_dirs < degrees2(bin) & sac_dirs >= degrees2(bin-1));
-    curves(bin,:) = nandens(fix_aligned(these_directions,:),30,'gauss',Fs);
-end
-mean_of_curves = nanmean(fr);
-crude_direction_curves = curves; %save for later
-curves = abs(curves-mean_of_curves); %negatvie and positive work
-%don't include more than 100 ms before fixation and 200 ms after, have
-%yet to see a good example with prominent tuning outside this anyway
-time_of_max_modulation = find(curves(:,100:400) == max(max(curves(:,100:400))));
-[~,time_of_max_modulation] = ind2sub(size(curves(:,100:400)),time_of_max_modulation); %got to convert back into time index
-time_of_max_modulation = time_of_max_modulation+100; %since ingored the first 100 ms before
-window = time_of_max_modulation-((window_width/2)-1):time_of_max_modulation+window_width/2; %take window around peak
-
-if (spatial_info.shuffled_rate_prctile(unit) > 95) || (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
-    fix_aligned = fix_aligned(in_out{unit} == 2 | in_out{unit} == 4,:); %fixations in2in or out2out
-    sac_dirs = sac_dirs(in_out{unit} == 2 | in_out{unit} == 4); %directions for fixations in2in or out2out
+%---Remove Counfounding Eye Movements for Spatially Modulated Neurons---%
+%remove saccades in2in or out2out since in2out or out2in
+%could be biased by field location creating artificial direction tuning
+%but only do this if spatial (both criterion)
+if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+    sac_aligned = sac_aligned(sac_in_out{unit} == 2 | sac_in_out{unit} == 4,:); %saccades in2in or out2out
+    sac_dirs = sac_dirs(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for saccades in2in or out2out only
+    sac_amps = sac_amps(sac_in_out{unit} == 2 | sac_in_out{unit} == 4); %directions for saccades in2in or out2out only
+    fix_starts = fix_starts((sac_in_out{unit} == 2 | sac_in_out{unit} == 4));
+    fix_ends = fix_ends((sac_in_out{unit} == 2 | sac_in_out{unit} == 4));
 end
 
+%also remove saccades that are too big since won't have many anyway
+sac_aligned_amp = sac_aligned;
+too_large = find(sac_amps > max_amplitude);
+sac_aligned_amp(too_large,:) = [];
+sac_amps(too_large)=[];
+sac_fix_starts = fix_starts;
+sac_fix_starts(too_large) = [];
+sac_fix_ends = fix_ends;
+sac_fix_ends(too_large) = [];
 
-this_unit = [];
-for unit = 1:size(unit_stats,2)
-    if strcmpi(unit_stats{1,unit},unit_name)
-        this_unit = unit;
-        break
+%---Modify Window if Necessary based on Fixation Durations and Remove Fixation Durations that are too Short---%
+window_width = length(all_direction_windows{unit});
+window_end = all_direction_windows{unit}(end);
+window_start = all_direction_windows{unit}(1);
+if window_end > end_window
+    window_end = window_end-twinad1;
+    median_fixation_dur = median(fix_ends);
+    %if more than half the fixations are shorter than window length
+    %cut window down to median fixation duration othwerise we will just
+    %cut fixations shorter than window end
+    if median_fixation_dur < window_end
+        window = all_direction_windows{unit};
+        window(window > median_fixation_dur+twinad1) = [];
+        if length(window) < min_window_width;
+            all_direction_windows{unit} = [];
+        else
+            all_direction_windows{unit} = window;
+        end
+        window_end = all_direction_windows{unit}(end)-twinad1;
     end
+    %remove fixations shorter than window as these could be
+    %contaminated by the next saccade
+    fixations_too_short = find(fix_ends < window_end);
+    sac_dirs(fixations_too_short) = [];
+    sac_aligned(fixations_too_short,:) = [];
+    fix_ends(fixations_too_short) = [];
+    fix_starts(fixations_too_short) = [];
+end
+if window_start < twinad1-min_fix_dur
+    fixations_too_short = find((twinad1+fix_starts) > window_start);
+    sac_dirs(fixations_too_short) = [];
+    sac_aligned(fixations_too_short,:) = [];
+    fix_ends(fixations_too_short) = [];
+    fix_starts(fixations_too_short) = [];
 end
 
 
-firing_rate_map = get_firing_rate_map({eyepos{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all'); %get firing rate map
-maxfr = prctile(firing_rate_map(:),97.5);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%---Saccade Direction Plots---%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%
 figure
-%---plot firing rate map for all images---%
+[~,si] = sort(sac_dirs);
+sac_aligned_sorted = sac_aligned(si,:);
+[trial,time] = find(sac_aligned_sorted == 1);
+plot(time-twinad1,trial,'.k')
+xlim([-twinad1 twinad2])
+if ~isempty(trial)
+    yl = [0 max(trial)+1];
+    ylim([0 max(trial)+1]);
+    hold on
+    if ~isempty(all_direction_windows{unit})
+        h = fill([all_direction_windows{unit}(1) all_direction_windows{unit}(end) ...
+            all_direction_windows{unit}(end) all_direction_windows{unit}(1) all_direction_windows{unit}(1)]-twinad1,...
+            [yl(1) yl(1) yl(2) yl(2) yl(1)],'r'); %window of interest
+        %set(h,'facealpha',.25,'EdgeColor','None')
+    end
+    hold off
+end
+xlim([-twinad1 twinad2]);
+ylabel('Ranked Sac. Dir.')
+xlabel('Time from Saccade Start (ms)')
+title('Fixation Aligned-Saccade Direction')
+box off
+%%
+%---Firing Rate Map---%
+figure
+firing_rate_map = get_firing_rate_map({eyepos{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all'); %get firing rate map
+maxfr = prctile(firing_rate_map(:),97.5); %set 97.5 percentile of firing rate map to help visualize
 h = imagesc(firing_rate_map);
 set(h,'alphadata',~isnan(firing_rate_map));
-title_str = ['\\rho_{1/2} = ' num2str(spatial_info.spatialstability_halves(1,unit),2)];
-title(sprintf(title_str))
 axis off
 axis equal
-colorbar
 colormap('jet')
+colorbar
 clim = caxis;
 caxis([clim(1) maxfr])
-
-bin_deg = 12;
-  [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,fix_aligned,window,sac_dirs);
-    binned_firing_rate_curves{1,unit} = mean_binned_firing_rate; %binned firing rates
-    
-    [prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
-    select_prefred_indeces(binned_firing_rate_curves{1,unit},degrees,sac_dirs,3);
-
+title_str = ['\\rho_{1/2} = ' num2str(spatial_info.spatialstability_halves(1,unit),2)];
+title(sprintf(title_str));
+%%
 figure
-t = -twin1:twin2-1; %time for plotting
-%---Fixation Aligned Acitivity out2out & in2in Plotted by Prefered and AntiPrefered Direction-All Fixations---%
-[prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
-    select_prefred_indeces(binned_firing_rate_curves{1,unit},degrees,sac_dirs,2);
+[~,prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
+    select_prefred_indeces(direction_binned_firing_rate_curves{1,unit},degrees,sac_dirs,smval_deg,bin_deg);
 hold on
-dofill(t,fix_aligned(prefered_dirs,:),'green',1,smval); %plot fixation aligned activity for prefered direction
-dofill(t,fix_aligned(anti_prefered_dirs,:),'black',1,smval); %plot fixation aligned activity for anti-prefered direction
+dofill(tm,sac_aligned(prefered_dirs,:),'green',1,smval); %plot fixation aligned activity for prefered direction
+dofill(tm,sac_aligned(anti_prefered_dirs,:),'black',1,smval); %plot fixation aligned activity for anti-prefered direction
 yl = ylim;
 if yl(1) < 0;
     yl(1) = 0;
@@ -453,122 +526,82 @@ if yl(1) < 0;
 end
 plot([0 0],[yl(1) yl(2)],'k--')
 hold off
-xlim([-twin1 twin2]);
-set(gca,'Xtick',[-twin1 0 twin1 twin2])
-xlabel('Time from Fixation Start (ms)')
+xlim([-twinad1 twinad2]);
+xlabel('Time from Saccade Start (ms)')
 ylabel('Firing Rate (Hz)')
-title('All Fixation Aligned Activity')
-legend('Prefered','Anti-Preferred')
-axis square
+title('All Saccade Aligned Activity')
+%%
+figure(101)
+p = polarplot(degrees,[smoothed_direction_curve(end) smoothed_direction_curve],'b');
+title(sprintf(['Max FR. ' num2str(max(smoothed_direction_curve),2) ' Hz, MRL: ' num2str(mrls.all_saccades(unit),2) ' (' num2str(mrls.all_saccades_shuffled_prctile(unit),3) '%%)']))
+rlim([0 max(smoothed_direction_curve)])
 
-figure
-polarplot(degrees,[smoothed_direction_curve smoothed_direction_curve(1)],'b')
-title(sprintf(['All mrl: ' num2str(mrls.all_fixations(unit),2) ' (' num2str(mrls.all_fixations_shuffled_prctile(unit),3) '%%)']))
-rl = max(smoothed_direction_curve);
-rlim([0 rl])
-
-
-
-
-%---Fixation Aligned Raster Sorted by Saccade Direction for out2out & in2in fixations---%
-figure
-[~,si] = sort(sac_dirs);
-fix_aligned_sorted = fix_aligned(si,:);
-[trial,time] = find(fix_aligned_sorted == 1);
-plot(time-twin1,trial,'.k')
-xlim([-twin1 twin2])
-if ~isempty(trial)
-    ylim([0 max(trial)+1]);
-    hold on
-    h = fill([window(1) window(end) window(end) window(1) window(1)]-twin1,...
-        [0 0 max(trial)+1 max(trial)+1 0],'r');
-    %     set(h,'facealpha',.25,'EdgeColor','None')
-    hold off
-end
-xlim([-twin1 twin2]);
-set(gca,'Xtick',[-twin1 0 twin1 twin2])
-ylabel('Ranked Sac. Dir.')
-xlabel('Time from Fixation Start (ms)')
-title('Fixation Aligned-Saccade Direction')
-box off
-axis square
-
-%---Plots for Fixations Out2Out Only---%
-%not plotting In2In since this is less interesting and coverage isn't
-%great for all neurons anyway. I'm more intesteted in showing direction
-%tuning out of the field
-if (spatial_info.shuffled_rate_prctile(unit) > 95) || (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
+%%
+if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95) && ~isnan(mrls.out2out(unit))
     %only run if spatially modulated or possibly modulated (95% skaggs OR 95% corr 1/2)
+    %---Out2Out Fixations---%
+    sac_out_out = saccade_aligned_firing{unit}(sac_in_out{unit} == 4,:); %fixation aligned firing rate
+    dir_out_out = saccade_directions{unit}(sac_in_out{unit} == 4); %saccade directions
+    fix_starts = fixation_starts{unit}(sac_in_out{unit} == 4);
+    fix_ends = fixation_ends{unit}(sac_in_out{unit} == 4);
     
-       %---Out2Out Fixations---%
-        fix_out_out = list_fixation_locked_firing{unit}(in_out{unit} == 4,:); %fixation aligned firing rate
-        dir_out_out = saccade_direction{unit}(in_out{unit} == 4); %saccade directions
-        
+    %---Remove Fixations with Durations that are too short---%
+    window_end = all_direction_windows{unit}(end);
+    window_start = all_direction_windows{unit}(1);
+    if window_end > end_window
+        fixations_too_short = find(fix_ends < (window_end-twinad1));
+        dir_out_out(fixations_too_short) = [];
+        sac_out_out(fixations_too_short,:) = [];
+        fix_ends(fixations_too_short) = [];
+        fix_starts(fixations_too_short) = [];
+    end
+    if window_start < twinad1-min_fix_dur
+        fixations_too_short = find((twinad1+fix_starts) > window_start);
+        dir_out_out(fixations_too_short) = [];
+        sac_out_out(fixations_too_short,:) = [];
+        fix_ends(fixations_too_short) = [];
+        fix_starts(fixations_too_short) = [];
+    end
     
     %---Smoothed Plot of Firing Rate by Saccade Direction Out2Out ixations---%
-%     binned_firing_rate_curves{3,unit}(isnan(binned_firing_rate_curves{3,unit})) = nanmean(binned_firing_rate_curves{3,unit});
-% %     [prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
-% %         select_prefred_indeces(binned_firing_rate_curves{3,unit},degrees,dir_out_out,smval_deg);
-
-    bin_deg = 12;
-  [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,fix_out_out,window,dir_out_out);
-    binned_firing_rate_curves{3,unit} = mean_binned_firing_rate; %binned firing rates
+    [~,~,~,smoothed_direction_curve] = ...
+        select_prefred_indeces(direction_binned_firing_rate_curves{3,unit},degrees,dir_out_out,smval_deg,bin_deg);
+    figure(101)
+    hold on
+    polarplot(degrees,[smoothed_direction_curve(end) smoothed_direction_curve],'b')
+    hold off
+    title(sprintf(['Max FR. ' num2str(max(smoothed_direction_curve),2) ' Hz, MRL: ' num2str(mrls.all_saccades(unit),2) ' (' num2str(mrls.all_saccades_shuffled_prctile(unit),3) '%%)' ...
+        '\n Out2Out mrl: ' num2str(mrls.out2out(unit),2) ' (' num2str(mrls.out2out_shuffled_prctile(unit),3) '%%)']))
     
-    [prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
-    select_prefred_indeces(binned_firing_rate_curves{3,unit},degrees,sac_dirs,3);
-
-
-    figure
-    polarplot(degrees,[smoothed_direction_curve smoothed_direction_curve(1)],'b')
-    title(['Out2Out mrl: ' num2str(mrls.out2out(unit),2) ' (' num2str(mrls.out2out_shuffled_prctile(unit),3) '%)'])
-    rlim([0 rl])
-  
-%     %---Fixation Aligned Acitivity Plotted by Prefered and AntiPrefered Direction-All Fixations---%
-%     figure
-%     hold on
-%     dofill(t,fix_out_out(prefered_dirs,:),'green',1,smval);
-%     dofill(t,fix_out_out(anti_prefered_dirs,:),'black',1,smval);
-%     yl = ylim;
-%     if yl(1) < 0;
-%         yl(1) = 0;
-%         ylim([0 yl(2)]);
-%     end
-%     plot([0 0],[yl(1) yl(2)],'k--')
-%     hold off
-%     xlabel('Time from Fixation Start (ms)')
-%     ylabel('Firing Rate (Hz)')
-%     title('Out2Out Fixation Aligned Activity')
-%     legend('Prefered','Anti-Preferred')%,'Neutral1','Neutral2')
-%     ylim([0 16])
-%     axis square
-
-
+    %---Out2Out Fixation Aligned Raster Sorted by Saccade Direction---%
 end
+
+
 % %% Sacade Amplitude Stuff
-% 
+%
 % %plots fixation aligned rasters so that can export to eps
-% 
+%
 % clar
 % data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
 % %data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
-% 
+%
 % %non-place cell amplitude tuning 1
 % task_file = 'TO151208_3';
 % unit_name = 'sig003b';
-% 
+%
 % bin_amplitude = 2; %dva for calculating saccade amplitude tuning
 % bin_amplitude2 = 2;%dva for estimating window of interest
 % max_amplitude = 16;%dva, approximately 95th percentile, don't have many large ones so remove
-% 
-% 
+%
+%
 % load([data_dir task_file(1:8) '-Eyemovement_Locked_List_results.mat']);
 % load([data_dir task_file(1:end) '-spatial_analysis_results.mat'],...
 %     'spatial_info','eyepos','spike_times','binsize','Fs','filter_width')
 % load([data_dir task_file(1:8) '-Saccade_amplitude_Analysis.mat']);
-% 
+%
 % H = define_spatial_filter(filter_width);
-% 
-% 
+%
+%
 % unit_stats = unit_names;
 % this_unit = [];
 % for unit = 1:size(unit_stats,2)
@@ -577,43 +610,43 @@ end
 %         break
 %     end
 % end
-% 
+%
 % imageX = 800;
 % imageY = 600;
-% 
-% 
+%
+%
 % sac_amps = fixation_information{unit}(:,6); %fixation aligned firing rate
 % sac_amps = sac_amps/24; %convert to dva
 % fix_aligned = fixation_locked_firing{unit}; %saccade amplitudes
-% 
+%
 % %remove fixation within the first 500 ms of images on
 % %amplitude is affected by time within image period
 % time_from_image_on = fixation_information{unit}(:,4); %fixation aligned firing rate
 % too_early = find(time_from_image_on < image_on_twin);
 % fix_aligned(too_early,:) = [];
 % sac_amps(too_early,:) = [];
-% 
+%
 % window_width = 100;
-% 
+%
 % %remove saccades that are too big since wont have many anyway
 % too_large = find(sac_amps > max_amplitude);
 % fix_aligned(too_large,:) = [];
 % sac_amps(too_large)=[];
-% 
+%
 % fr = nandens(fix_aligned,smval,'gauss',1000,'nanflt'); %firing rate curve aligned to fixations
 % window = all_windows{unit};
-% 
-% 
-%  firing_rates = sum(fix_aligned(:,window),2)*1000/window_width;   
-% 
-% 
+%
+%
+%  firing_rates = sum(fix_aligned(:,window),2)*1000/window_width;
+%
+%
 % t = -twin1:twin2-1; %time for plotting
-% 
-% 
+%
+%
 % %---Plot Firing Rate Curves for Large vs Small Amplitude Saccades---%
 % small = prctile(sac_amps,25);
 % large = prctile(sac_amps,75);
-% 
+%
 % figure
 % hold on
 % dofill(t,fix_aligned(sac_amps <= small,:),'black',1,smval); %smoothed fiirng rate curve
@@ -632,10 +665,10 @@ end
 % legend('Small','Large')
 % title(['Firing Rate Curves for Small and Large Saccades']);
 % yl = ylim;
-% 
-% 
+%
+%
 % figure
-% 
+%
 % %---Fixation Aligned Firing Rate Curve--%
 % dofill(t,fix_aligned,'black',1,smval); %smoothed fiirng rate curve
 % hold on
@@ -650,8 +683,8 @@ end
 % ylabel('Firing Rate (Hz)')
 % title('All Fixation Aligned Activity')
 % ylim(yl)
-% 
-% 
+%
+%
 % %---Fixation Aligned Raster Sorted by Saccade amplitude for out2out & in2in fixations---%
 % figure
 % [~,si] = sort(sac_amps);
@@ -673,7 +706,7 @@ end
 % xlabel('Time from Fixation Start (ms)')
 % title('Fixation Aligned-Saccade amplitude')
 % box off
-% 
+%
 % %---Firing Rate Curve for Saccade Amplitude---%
 % amps = [2:bin_amplitude:max_amplitude];
 % figure
@@ -682,7 +715,7 @@ end
 % ylabel('Firing Rate')
 % title(sprintf(['\\rho_{amp} = '  num2str(amplitude_correlations(unit),3) ' (' num2str(amplitude_correlations_percentile(unit),3) '%%)']))
 % box off
-% 
+%
 % %---Firing Rate Map---%
 % figure
 % firing_rate_map = get_firing_rate_map({eyepos{unit},spike_times{unit}},imageX,imageY,binsize,H,Fs,'all'); %get firing rate map

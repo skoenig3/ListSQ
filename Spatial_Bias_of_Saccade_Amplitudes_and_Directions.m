@@ -269,6 +269,20 @@ title('Circular Variance (1-MRL) of Saccade Direction by Fixation Location')
 axis off
 axis equal
 
+%%
+[x,y] = meshgrid(1:size(observed_mrl_direction,2),1:size(observed_mrl_direction,1));
+
+u = observed_mrl_direction.*cos(observed_average_direction);
+v = -observed_mrl_direction.*sin(observed_average_direction);
+
+
+figure
+imagesc(observed_average_direction*180/pi)
+hold on
+quiver(x,y,u,v,'linewidth',1)
+hold off
+box off
+axis off
 %% Bootstrap to determine whether observed values are significant or not
 
 numshuffs = 10000;
@@ -327,7 +341,7 @@ for xi = 1:length(x_bins)-2
     end
 end
 
-
+%%
 figure
 subplot(2,2,1)
 imagesc(sig_average_amplitude)

@@ -37,7 +37,7 @@ trial_count = [];
 
 RMS_noise = cell(2,85); %variability in fixation position as a liberal estimate of eye tracking noise
 %row 1 is x, row 2 is y
-for monkey =2
+for monkey =1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
@@ -295,7 +295,7 @@ end
 
 %---Stats Test---%
 p_wilx = signrank(median(nov_fix_durs),median(rep_fix_durs)); %Wilcoxon signed rank test for zero median between novel and repeated images
-%nonparametric, repeated measures (across multiple fixations), analysiss
+%nonparametric, repeated measures (across multiple fixations), analysis
 p_vals = [];
 for f = 1:size(nov_fix_durs,2)
     [~,p_vals(f)] = ttest(nov_fix_durs(:,f),rep_fix_durs(:,f)); %paired ttest, not sure if really valid but easy to interpret

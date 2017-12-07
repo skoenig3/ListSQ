@@ -5,7 +5,7 @@
 % 2) Summarize circular non-uniformity p-value (biased by fixation count and firing rate)
 % 3) Copies relevant figures for place cells to summary directory
 
-%Code rechecked by SDK on 1/5/2017
+%Code rechecked by SDK on 1/5/2017 & then re-written and rechecked again 5/3/2017
 
 clar %clear,clc
 
@@ -23,9 +23,6 @@ imageY = 600; %vertical image size
 saccades_with_spikes = [];
 smval_deg = 6;%18 %9 degrees std
 
-
-place_firing = [];
-
 %---Values All Fixations out2out and in2in---%
 all_mrls = []; %all observed MRLs (mean resultant vector length) ignoring out2in and in2out
 all_mrl_pctiles = []; %observed MRLs shuffled percentile ignoring out2in and in2out
@@ -38,12 +35,16 @@ all_mrl_out_pctiles = []; %observed MRLs shuffled percentile ignoring out2in and
 spatialness = []; %1 for place cell, 0 for non place cell
 all_unit_names = {};
 all_monkeys = []; %1s and 2s for monkeys
+direction_cell_AP_location = []; %AP location of recorded place cell
+place_cell_curves_in_min_out = [];
+
 
 prefered_firing_rate_curves = [];
 anti_prefered_firing_rate_curves = [];
 ratio_prefered = [];
 all_windows  = [];
 normalized_prefered = [];
+median_prefered_directions = [];
 
 figure_dir = {};
 all_dirs = []; %saccade directions for significant units
@@ -124,11 +125,11 @@ for monkey = 2:-1:1
         
         num_units = size(unit_stats,2);
         for unit =1:num_units
-            if ~isnan(mrls.all_fixations(unit)) %if unit was processed
+            if ~isnan(mrls.all_saccades(unit)) %if unit was processed
                 
                 %---Values All Fixations out2out and in2in---%
-                all_mrls = [all_mrls mrls.all_fixations(unit)]; %all observed MRLs (mean resultant vector length) ignoring out2in and in2out
-                all_mrl_pctiles = [all_mrl_pctiles mrls.all_fixations_shuffled_prctile(unit)];%observed MRLs shuffled percentile ignoring out2in and in2out
+                all_mrls = [all_mrls mrls.all_saccades(unit)]; %all observed MRLs (mean resultant vector length) ignoring out2in and in2out
+                all_mrl_pctiles = [all_mrl_pctiles mrls.all_saccades_shuffled_prctile(unit)];%observed MRLs shuffled percentile ignoring out2in and in2out
                 
                 all_dirs = [all_dirs saccade_direction{unit}];
                 
@@ -141,12 +142,65 @@ for monkey = 2:-1:1
                 all_monkeys = [all_monkeys monkey];
                 if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
                     spatialness = [spatialness 1]; %place cell
+                    
+                    sac_firing = saccade_aligned_firing{unit};
+                    in_out = sac_in_out{unit};
+                    fix_ends = fixation_ends{unit};
+                    
+                    out2in_firing = sac_firing(in_out == 1,:);
+                    o2i = nandens3(out2in_firing,smval,1000);
+                    out2out_firing = sac_firing(in_out == 4,:);
+                    o2o = nandens3(out2out_firing,smval,1000);
+                    out2in_fixdurs = fix_ends(in_out == 1);
+                    out2out_fixdurs = fix_ends(in_out == 4);
+                    
+                    [PKS,LOCS]= findpeaks(o2i-o2o,'MinPeakWidth',smval); %find peaks > 2*std in width
+                    if isempty(PKS)
+                        [PKS,LOCS]= findpeaks(o2i,'MinPeakWidth',smval); %find peaks > 2*std in width
+                    end
+                    if ~isempty(PKS)
+                        LOCS = LOCS(PKS == max(PKS));
+                        PKS = max(PKS);
+                        median_fix_dur = median(fix_ends);
+                        
+                        if LOCS-twinad1 >  median_fix_dur
+                            %can't really do much about it by can try
+                            too_short = find(out2in_fixdurs < median_fix_dur);
+                            out2in_firing(too_short,:) = [];
+                            o2i = nandens3(out2in_firing,smval,1000);
+                            
+                            too_short = find(out2out_fixdurs < median_fix_dur);
+                            out2out_firing(too_short,:) = [];
+                            o2o = nandens3(out2out_firing,smval,1000);
+                            
+                            od =  o2i-o2o;
+                            od = od-mean(od(1:twinad1));
+                            od = od/max(od);
+                            place_cell_curves_in_min_out = [place_cell_curves_in_min_out; od];
+                        else%remove eye movements that are shorter than the peak
+                            min_dur = LOCS-twinad1+smval; %add duration of smoothing param
+                            too_short = find(out2in_fixdurs < min_dur);
+                            out2in_firing(too_short,:) = [];
+                            o2i = nandens3(out2in_firing,smval,1000);
+                            
+                            too_short = find(out2out_fixdurs < min_dur);
+                            out2out_firing(too_short,:) = [];
+                            o2o = nandens3(out2out_firing,smval,1000);
+                            
+                            od =  o2i-o2o;
+                            od = od-mean(od(1:twinad1));
+                            od = od/max(od);
+                            place_cell_curves_in_min_out = [place_cell_curves_in_min_out; od];
+                            
+                        end
+                    end
                 else
                     spatialness = [spatialness 0]; %non place cell
                 end
+                direction_cell_AP_location = [direction_cell_AP_location chamber_zero(1)+ session_data{sess}.location(1)]; %AP location of recorded place cell
                 
-                if  mrls.all_fixations_shuffled_prctile(unit) > 95
-
+                if  mrls.all_saccades_shuffled_prctile(unit) > 95
+                    
                     window = all_direction_windows{unit};
                     all_windows = [all_windows {window}];
                     
@@ -186,12 +240,13 @@ for monkey = 2:-1:1
                         sac_dirs(fixations_too_short) = [];
                         sac_aligned(fixations_too_short,:) = [];
                     end
-    
+                    
                     [mean_binned_firing_rate,degrees,mrl] = bin_directional_firing(bin_deg,sac_aligned,window,sac_dirs);
                     binned_firing_rate_curves{1,unit} = mean_binned_firing_rate; %binned firing rates
-                    [prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
+                    [estimated_prefered_direction,prefered_dirs,anti_prefered_dirs,smoothed_direction_curve] = ...
                         select_prefred_indeces(binned_firing_rate_curves{1,unit},degrees,sac_dirs,smval_deg,bin_deg);
                     
+                    median_prefered_directions = [median_prefered_directions estimated_prefered_direction];
                     if strcmpi(task_file(1:8),'TO160515')
                         disp('now')
                     end
@@ -202,9 +257,9 @@ for monkey = 2:-1:1
                     a(a == 0) = 1;
                     ratio_prefered = [ratio_prefered; pref./a];
                     
-%                     if max(pref./a) > 10
-%                        disp('now') 
-%                     end
+                    %                     if max(pref./a) > 10
+                    %                        disp('now')
+                    %                     end
                     
                     if any(isnan(ratio_prefered(end,:)))
                         disp('now')
@@ -212,11 +267,11 @@ for monkey = 2:-1:1
                         disp('now')
                     end
                     
-                    norm = pref-antipref; 
+                    norm = pref-antipref;
                     norm = norm-mean(norm);
                     norm = norm/max(norm);
                     normalized_prefered = [normalized_prefered; norm];
-                                        
+                    
                     pref = pref-mean(pref);
                     pref = pref/max(abs(pref));
                     antipref = antipref-mean(antipref);
@@ -309,7 +364,7 @@ plot(tm,nanmean(prefered_firing_rate_curves),'g')
 plot([tm(1) tm(end)],[0 0],'k')
 plot([0 0],[-1 1],'k--')
 hold off
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Normalized Firing Rate')
 title('Population Average Mormalzed Firing Rates')
 legend('Anti-prefered','Prefered')
@@ -318,14 +373,14 @@ subplot(2,2,2)
 [~,mxi] = max(prefered_firing_rate_curves');
 [~,si] = sort(mxi);
 imagesc(tm,1:size(prefered_firing_rate_curves,1),prefered_firing_rate_curves(si,:))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Neuron #')
 colormap('jet')
 title('Time Cell Plot')
 
 subplot(2,2,3)
 plot(tm,nandens3(ratio_prefered,20,1))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Ratio')
 title('Average Ratio of Prefered/Anti-Prefered')
 box off
@@ -338,7 +393,7 @@ end
 
 subplot(2,2,4)
 plot(tm,100*window_conc/length(all_windows))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('% of Units')
 title('Distribution of 100 ms Window with Greatest Direction Modulation')
 box off
@@ -375,18 +430,20 @@ subplot(1,2,1)
 [~,mxi] = max(normalized_prefered');
 [~,si] = sort(mxi);
 imagesc(tm,1:size(normalized_prefered,1),normalized_prefered(si,:))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Neuron #')
 colormap('jet')
 title('Time Cell Plot-sorted by max')
 caxis([-stdvals 1])
 axis square
 
+sig_names = all_unit_names(all_mrl_pctiles > 95);
+sig_names = sig_names(si);
 
 subplot(1,2,2)
 [~,si2] = sort(median_window);
 imagesc(tm,1:size(normalized_prefered,1),normalized_prefered(si2,:))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Neuron #')
 colormap('jet')
 title('Time Cell Plot-sorted by window')
@@ -400,7 +457,7 @@ subplot(2,2,1)
 [~,mxi] = max(spatial');
 [~,si] = sort(mxi);
 imagesc(tm,1:size(spatial,1),spatial(si,:))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Neuron #')
 colormap('jet')
 title('Spatial Neurons')
@@ -425,7 +482,7 @@ subplot(2,2,2)
 [~,mxi] = max(nonspatial');
 [~,si] = sort(mxi);
 imagesc(tm,1:size(nonspatial,1),nonspatial(si,:))
-xlabel('Time From Saccade Start (ms)') 
+xlabel('Time From Saccade Start (ms)')
 ylabel('Neuron #')
 colormap('jet')
 title('Non-Spatial Neurons')
@@ -455,6 +512,66 @@ for w = 1: length(all_windows)
         post_saccadic = [post_saccadic w];
     else
         peri_saccadic = [peri_saccadic w];
-    end    
+    end
 end
+%%
+any_pre_sac = [];
+for w = 1: length(all_windows)
+    ind = all_windows{w};
+    if sum(ind < twinad1) > smval/2 %smoothing window
+        any_pre_sac = [any_pre_sac w];
+    end
+end
+%%
 
+figure
+hold on
+for m = 1:length(median_prefered_directions)
+    polar([median_prefered_directions(m) median_prefered_directions(m)],[0 1],'k')
+end
+axis square
+box off
+
+figure
+polarplot(0,0)
+box off
+%%
+figure
+hist(window_len,20)
+hold on
+plot([median(window_len) median(window_len)],[0 8],'r--')
+hold off
+xlabel('FWHM (ms)')
+ylabel('Direction Cell Count')
+box off
+%%
+sig_mrls = all_mrls(all_mrl_pctiles > 95);
+
+figure
+hist(sig_mrls,25)
+hold on
+plot([median(sig_mrls) median(sig_mrls)],[0 5],'r--')
+hold off
+xlabel('MRL')
+ylabel('Saccade Direction Cell Count')
+box off
+title(['Median MRL: ' num2str(median(sig_mrls),2)])
+%%
+sig_APs = direction_cell_AP_location(all_mrl_pctiles > 95);
+figure
+plot(sig_APs,mxi,'.k')
+
+%%
+vals = place_cell_curves_in_min_out(:,1:twinad1);
+figure
+[~,mxi] = max(place_cell_curves_in_min_out');
+[~,place_order] = sort(mxi); %sort order by peak firing time
+imagesc([-twinad1:twinad2-1],[1:size(place_cell_curves_in_min_out,1)],place_cell_curves_in_min_out(place_order,:))
+hold on
+plot([0 0],[0 size(place_cell_curves_in_min_out,1)],['w--']);
+hold off
+colormap('jet')
+xlabel('Time From Saccade Start (ms)')
+ylabel('View Cell #')
+caxis([-std(vals(:)) 1])
+coloarbar

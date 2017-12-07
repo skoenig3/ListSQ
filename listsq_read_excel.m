@@ -69,7 +69,7 @@ for sess = 1:length(session_start);
                 session_data{sess}.task1_file = string_trim(sess_raw{row+1,1});
                 session_data{sess}.task1 = string_trim(sess_raw{row+1,6});
                 session_data{sess}.location = [sess_raw{row+1,2} sess_raw{row+1,3}];
-                
+                session_data{sess}.subregion = sess_raw{row+1,4};
                 session_data{sess}.task1_unit_names = []; %unit sames e.g. sig001a
                 session_data{sess}.task1_unit_waveforCount = []; %number of waveforms
                 session_data{sess}.task1_unit_confidence = []; %confidence that what is sorted is a real spike
