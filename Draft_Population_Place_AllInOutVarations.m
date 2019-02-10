@@ -52,6 +52,8 @@ coverage = {}; %eye data coverage for place cells
 
 %---Place Cell Firing Rate Curves for List---%
 all_in_rates = [];%fixations out-> in
+all_nonplace_out2in_rates = [];%for non-place
+all_same_norm_rates = [];
 all_in_minus_out_rates = [];%out-> in minus out-> out
 all_out_rates = []; %fixaiton out-> out normalized by max of out->out
 all_fixation_rates = [];%all fixaions normalized by max of all fixations
@@ -59,6 +61,12 @@ all_list_peak_times = [];%time of peak firing rate of place cells for out-> in f
 sig_p_list = []; %whether fixation firing rates were reliably different for in vs out for list
 all_peak_list = []; %peak firing rate during list
 all_list_peak_time = [];%peak firing time list
+
+all_in_rates = [];%fixations out-> in
+all_out_rates = []; %fixaiton out-> out normalized by out2in rates
+all_in2in_rate = [];%fixaiton in-> in normalized by out2in rates
+all_out_rates_self_norm = []; %fixaiton out-> out normalized by max of out->out
+all_in2in_rate_self_norm = [];%fixaiton in-> in normalized by max of in2in
 
 %---Firing Rate Curve Properties for Sequence Task---%
 sig_p_seq = []; %whether firing rates were significantly different for in vs out for seq
@@ -135,6 +143,16 @@ for monk =2:-1:1
         load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],...
             'spatial_info','spike_times','eyepos','binsize','filter_width')
         
+         if exist([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'],'file') %want to remove later
+            load([data_dir task_file(1:8) '-Saccade_Direction_and_Amplitude_Analysis.mat'])
+            load([data_dir task_file(1:8) '-Saccade_Eyemovement_Locked_List_results.mat']);
+        else
+            if num_units ~= 0
+                error('Where is this file')
+            end
+            continue
+        end
+        
         %load Place Cell Fixation Analysis data
         load([data_dir task_file(1:8) '-Place_Cell_Analysis.mat'])
         if numshuffs < 1000
@@ -191,15 +209,18 @@ for monk =2:-1:1
                 n_out2in = [n_out2in sum(in_out{unit} == 1)];%number of fixaitons out->in
                 
                             
-                %firing rate out-> in
+                 %firing rate out-> in
                 firing_rate = list_fixation_locked_firing{unit}(in_out{unit} == 1,:); %get spike trains
                 in_curve = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
                 in_curve2 = in_curve;
-                in_curve = in_curve-nanmean(in_curve(1:twin1)); %remove base line
+                baseline = nanmean(in_curve(1:twin1)); %remove base line
+                in_curve = in_curve- baseline;
                 if ~isnan(stats_across_tasks(1,unit))%peak detected
-                    in_curve = in_curve/in_curve(stats_across_tasks(1,unit));%divide by peak firing rate
+                    max_rate = in_curve(stats_across_tasks(1,unit));%divide by peak firing rate;
+                    in_curve = in_curve/max_rate;
                 else %no peak so normalize by max
-                    in_curve = in_curve/max(in_curve);
+                    max_rate = max(in_curve);
+                    in_curve = in_curve/max_rate;
                 end
                 all_in_rates = [all_in_rates; in_curve];%fixations out-> in
                 all_peak_list = [all_peak_list stats_across_tasks(2,unit)]; %peak firing rate during list
@@ -211,20 +232,36 @@ for monk =2:-1:1
                 out_curve2 = out_curve;
                 out_curve = out_curve-nanmean(out_curve(1:twin1)); %remove base line
                 out_curve = out_curve/nanmax(out_curve); %not sure what peak would be so normalize by max
-                all_out_rates = [all_out_rates; out_curve];%fixation out->out
+                all_out_rates_self_norm = [all_out_rates_self_norm; out_curve];%fixation out->out
                 
-                in_minus_out = in_curve2-out_curve2;
-                %in_minus_out = in_minus_out-mean(in_minus_out(1:twin1));
-                in_minus_out = in_minus_out/max(in_minus_out);
-                all_in_minus_out_rates = [all_in_minus_out_rates; in_minus_out];
+                out_curve2 = out_curve2-baseline;
+                out_curve2 = out_curve2/max_rate; 
+                all_out_rates = [ all_out_rates; out_curve2];
+                
+                %in -> in 
+                firing_rate = list_fixation_locked_firing{unit}(in_out{unit} == 2,:); %get spike trains
+                in_curve = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
+                in_curve2 = in_curve;
+                in_curve = in_curve-nanmean(in_curve(1:twin1)); %remove base line
+                in_curve = in_curve/nanmax(in_curve); %not sure what peak would be so normalize by max
+                all_in2in_rate_self_norm = [all_in2in_rate_self_norm; in_curve];%fixation out->out
+                
+                in_curve2 = in_curve2-baseline;
+                in_curve2 = in_curve2/max_rate; 
+                all_in2in_rate = [ all_in2in_rate; in_curve2];
+
                 
                 %firing rate for all fixations
                 firing_rate = list_fixation_locked_firing{unit};%get spike trains
                 firing_rate = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
+                firing_rate2 = firing_rate;
                 firing_rate = firing_rate-nanmean(firing_rate(1:twin1)); %remove base line
                 firing_rate = firing_rate/nanmax(firing_rate);%not sure what peak would be so normalize by max
                 all_fixation_rates = [all_fixation_rates; firing_rate]; %all fixations
                 
+                firing_rate2 = firing_rate2-baseline;
+                firing_rate2 = firing_rate2/max_rate;
+                all_same_norm_rates = [all_same_norm_rates; firing_rate2];
                 
                 %find when firing rate for in field fixations is higher than out of field
                 %for fixation out->in vs out->out
@@ -415,6 +452,22 @@ for monk =2:-1:1
                     chan = str2double(unit_stats{1,unit}(6));
                     non_place_cell_subregion = [non_place_cell_subregion vals{1}(chan)];
                 end
+                
+                if (temporal_info.saccade.shuffled_temporalstability_prctile(1,unit) > 95) ... %significant stability
+                    && (temporal_info.saccade.shuffled_rate_prctile(unit) > 95) % %skagg 95%+
+                    continue;%saccade modulated
+                elseif  mrls.all_saccades_shuffled_prctile(unit) > 95
+                    continue;%saccade direction modulated
+                elseif amplitude_correlations_percentile(unit) > 97.5
+                    continue;%saccade amplitude modulated
+                end
+                firing_rate = list_fixation_locked_firing{unit}(in_out{unit} == 1,:); %get spike trains
+                in_curve = nandens(firing_rate,smval,'gauss',Fs,'nanflt'); %calculate smoothed firing rate
+                in_curve2 = in_curve;
+                baseline = nanmean(in_curve(1:twin1)); %remove base line
+                in_curve = in_curve- baseline;
+                in_curve = in_curve/max(in_curve);
+                all_nonplace_out2in_rates = [all_nonplace_out2in_rates; in_curve];%fixations out-> in
             end
         end
     end
@@ -512,16 +565,52 @@ all_seq_peak_times(isnan(all_list_peak_times)) = [];
 sig_p_seq(isnan(all_list_peak_times)) = [];
 sig_p_list(isnan(all_list_peak_times)) = [];
 all_peak_list(isnan(all_list_peak_times)) = [];
-all_in_minus_out_rates(isnan(all_list_peak_times),:) = [];
+%%
+all_in2in_rate(isnan(all_list_peak_times),:) = [];
+all_out_rates_self_norm(isnan(all_list_peak_times),:) = [];
+all_in2in_rate_self_norm(isnan(all_list_peak_times),:) = [];
+%%
 place_cell_AP_location(isnan(all_list_peak_times)) = [];
 place_cell_subregion(isnan(all_list_peak_times)) = [];
 all_seq_firing_curves(isnan(all_list_peak_times),:) = [];
 all_list_peak_times(isnan(all_list_peak_times)) = [];
+
+%%
+twin = 200;
+figure
+subplot(1,2,1)
+vals = all_nonplace_out2in_rates(:,1:twin);
+[~,i] = nanmax(all_nonplace_out2in_rates,[],2); %sort by time of maximum firing rate
+[~,all_order] = sort(i);
+imagesc([-twin1:twin2-1],[1:size(all_nonplace_out2in_rates,1)],all_nonplace_out2in_rates(all_order,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_nonplace_out2in_rates,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('out -> in for non-View Cells')
+caxis([-nanstd(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+xlim([-twin1 twin2])
+colorbar
+
+subplot(1,2,2)
+hold on
+plot([-twin1:twin2-1],nanmean(all_nonplace_out2in_rates))
+yl = ylim;
+plot([0 0],[yl(1) yl(2)],'k--');
+plot([-44 -44],[yl(1) yl(2)],'k--')
+plot([-twin1 twin2],[0 0],'k')
+hold off
+xlabel('Time from Fixation Start (ms)')
+ylabel('Normalized Firing Rate')
+title(['Average Non-View Cell & Non-Eye Movement Fixation Aligned Firing Rate'])
+legend('Out2In','Out2Out','In2In','All')
 %% Plot Psuedo-Population Firing Rate Curves
 figure
 
 %---Firing Rate Curves for out->in fixations---%
-subplot(2,2,1)
+subplot(3,3,1)
 vals = all_in_rates(:,1:twin1); %"baseline" out of field firing rate
 [~,place_order] = sort(all_list_peak_times); %sort order by peak firing time
 imagesc([-twin1:twin2-1],[1:size(all_in_rates,1)],all_in_rates(place_order,:))
@@ -538,7 +627,7 @@ colorbar
 
 %---Firing Rate Curves for out->out fixations---%
 %sorted same order as above
-subplot(2,2,2)
+subplot(3,3,2)
 vals = all_out_rates(:,1:twin1); %"baseline" out of field firing rate
 imagesc([-twin1:twin2-1],[1:size(all_out_rates,1)],all_out_rates(place_order,:)) %sorted same order as above
 colormap('jet')
@@ -547,13 +636,45 @@ plot([0 0],[1 size(all_out_rates,1)],'w--');
 hold off
 xlabel('Time from Fixation Start')
 ylabel('Neuron #')
-title('out -> out')
+title('out -> out, same normalization & order')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+colorbar
+
+%---Firing Rate Curves for out->out fixations---%
+%sorted same order as above
+subplot(3,3,5)
+vals = all_out_rates_self_norm(:,1:twin1); %"baseline" out of field firing rate
+imagesc([-twin1:twin2-1],[1:size(all_out_rates_self_norm,1)],all_out_rates_self_norm(place_order,:)) %sorted same order as above
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_out_rates_self_norm,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('out -> out, Self normalization & Same order')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+colorbar
+
+%---Firing Rate Curves for out->out fixations---%
+%sorted same order as above
+subplot(3,3,8)
+[~,i] = max(all_out_rates_self_norm,[],2); %sort by time of maximum firing rate
+[~,all_order] = sort(i);
+vals = all_out_rates_self_norm(:,1:twin1); %"baseline" out of field firing rate
+imagesc([-twin1:twin2-1],[1:size(all_out_rates_self_norm,1)],all_out_rates_self_norm(all_order,:)) %sorted same order as above
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_out_rates_self_norm,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('out -> out, Self normalization & Own order')
 caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
 colorbar
 
 %---Firing Rate Curves for all fixations---%
 %sorted same order as above
-subplot(2,2,3)
+subplot(3,3,4)
 vals = all_fixation_rates(:,1:twin1); %"baseline" out of field firing rate
 imagesc([-twin1:twin2-1],[1:size(all_fixation_rates,1)],all_fixation_rates(place_order,:)) %sorted same order as above
 colormap('jet')
@@ -562,13 +683,13 @@ plot([0 0],[1 size(all_fixation_rates,1)],'w--');
 hold off
 xlabel('Time from Fixation Start')
 ylabel('Neuron #')
-title('All Fixations')
+title('All Fixations,Same Order')
 caxis([-std(vals(:)) 1])  %set minumun to standard deviation of baseline since some neurons are greatly inhibited
 colorbar
 
 %---Firing Rate Curves for all fixations---%
 %sorted on own
-subplot(2,2,4)
+subplot(3,3,7)
 [~,i] = max(all_fixation_rates,[],2); %sort by time of maximum firing rate
 [~,all_order] = sort(i);
 imagesc([-twin1:twin2-1],[1:size(all_fixation_rates,1)],all_fixation_rates(all_order,:))
@@ -582,11 +703,70 @@ title('All Fixations Sorted Seperately')
 caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
 colorbar
 
+subplot(3,3,3)
+imagesc([-twin1:twin2-1],[1:size(all_in2in_rate,1)],all_in2in_rate(place_order,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_fixation_rates,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('In2In Sorted Same; Normalized Same')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+colorbar
+
+
+subplot(3,3,6)
+vals = all_in2in_rate_self_norm(:,1:twin1); %"baseline" out of field firing rate
+imagesc([-twin1:twin2-1],[1:size(all_in2in_rate_self_norm,1)],all_in2in_rate_self_norm(place_order,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_fixation_rates,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('In2In Sorted Same; Normalized Seperately')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+colorbar
+
+subplot(3,3,9)
+[~,i] = max(all_in2in_rate_self_norm,[],2); %sort by time of maximum firing rate
+[~,all_order] = sort(i);
+vals = all_in2in_rate_self_norm(:,1:twin1); %"baseline" out of field firing rate
+imagesc([-twin1:twin2-1],[1:size(all_in2in_rate_self_norm,1)],all_in2in_rate_self_norm(all_order,:))
+colormap('jet')
+hold on
+plot([0 0],[1 size(all_fixation_rates,1)],'w--');
+hold off
+xlabel('Time from Fixation Start')
+ylabel('Neuron #')
+title('In2In Sorted Seperately; Normalized Seperately')
+caxis([-std(vals(:)) 1]) %set minumun to standard deviation of baseline since some neurons are greatly inhibited
+colorbar
 %% Population Average in Field Firing Rate Curve
+
+%%
+all_in2in_rate(isnan(all_list_peak_times),:) = [];
+all_out_rates_self_norm(isnan(all_list_peak_times),:) = [];
+all_in2in_rate_self_norm(isnan(all_list_peak_times),:) = [];
+%%
 [m,i] = max(nanmean(all_in_rates));
 figure
-plot([-twin1:twin2-1],nanmean(all_in_rates))
 hold on
+plot([-twin1:twin2-1],nanmean(all_in_rates))
+
+plot([-twin1:twin2-1],nanmean(all_out_rates))
+%plot([-twin1:twin2-1],nanmean(all_out_rates_self_norm))
+
+plot([-twin1:twin2-1],nanmean(all_in2in_rate))
+%plot([-twin1:twin2-1],nanmean(all_in2in_rate_self_norm))
+
+plot([-twin1:twin2-1],nanmean(all_same_norm_rates))
+%plot([-twin1:twin2-1],nanmean(all_fixation_rates))
+
+plot([-twin1:twin2-1],nanmean(all_nonplace_out2in_rates))
+
+
 yl = ylim;
 plot([0 0],[yl(1) yl(2)],'k--');
 plot([-44 -44],[yl(1) yl(2)],'k--')
@@ -595,6 +775,9 @@ hold off
 xlabel('Time from Fixation Start (ms)')
 ylabel('Normalized Firing Rate')
 title(['Average Place Cell Fixation Aligned Firing Rate, peak @ ' num2str(i-twin1) ' ms'])
+legend('Out2In','Out2Out','In2In','All','NonView/NonEyeMovement')
+
+%legend('Out2In','Out2Out','Out2OutSelf','In2In','In2InSelf','All')
 xlim([-twin1 twin2])
 box off
 axis square
@@ -975,4 +1158,100 @@ colorbar
 axis square
 
 subtitle(['Correlation between peak response: r = ' num2str(r(2),2) ', p = ' num2str(p(2),2)])
+%% PCA on data
+figure
+
+subplot(2,2,1)
+data = all_nonplace_out2in_rates;
+data(isnan(data(:,1)),:) = [];
+[U,S,V] = pca(data,3);
+T = kmeans(U,3);
+t = -twin1:twin2-1;
+hold all
+for i = 1:max(T)
+    if sum(T == i) > 1
+        plot(t,mean(data(T == i,:)))
+    else
+        plot(t,data(T == i,:));
+    end
+end
+plot([0 0],[-1 1],'k--')
+plot([-twin1 twin2],[0 0],'k')
+xlabel('Time from Fixation Start')
+ylabel('Normalized Firing')
+title('Non View Cells')
+
+subplot(2,2,2)
+data = all_in_rates;
+data(isnan(data(:,1)),:) = [];
+[U,S,V] = pca(data,3);
+T = kmeans(U,3);
+t = -twin1:twin2-1;
+hold all
+for i = 1:max(T)
+    if sum(T == i) > 1
+        plot(t,mean(data(T == i,:)))
+    else
+        plot(t,data(T == i,:));
+    end
+end
+plot([0 0],[-1 1],'k--')
+plot([-twin1 twin2],[0 0],'k')
+xlabel('Time from Fixation Start')
+ylabel('Normalized Firing')
+title('View Cells Out2In')
+
+subplot(2,2,3)
+data = all_out_rates;
+data(isnan(data(:,1)),:) = [];
+[U,S,V] = pca(data,3);
+T = kmeans(U,3);
+t = -twin1:twin2-1;
+hold all
+for i = 1:max(T)
+    if sum(T == i) > 1
+        plot(t,mean(data(T == i,:)))
+    else
+        plot(t,data(T == i,:));
+    end
+end
+plot([0 0],[-1 1],'k--')
+plot([-twin1 twin2],[0 0],'k')
+xlabel('Time from Fixation Start')
+ylabel('Normalized Firing')
+title('View Cells Out2Out')
+
+subplot(2,2,4)
+data = all_in2in_rate;
+data(isnan(data(:,1)),:) = [];
+[U,S,V] = pca(data,3);
+T = kmeans(U,3);
+t = -twin1:twin2-1;
+hold all
+for i = 1:max(T)
+    if sum(T == i) > 1
+        plot(t,mean(data(T == i,:)))
+    else
+        plot(t,data(T == i,:));
+    end
+end
+plot([0 0],[-1 1],'k--')
+plot([-twin1 twin2],[0 0],'k')
+xlabel('Time from Fixation Start')
+ylabel('Normalized Firing')
+title('View Cells In2In')
+
 %%
+
+
+plot([-twin1:twin2-1],nanmean(all_out_rates))
+%plot([-twin1:twin2-1],nanmean(all_out_rates_self_norm))
+
+plot([-twin1:twin2-1],nanmean(all_in2in_rate))
+%plot([-twin1:twin2-1],nanmean(all_in2in_rate_self_norm))
+
+plot([-twin1:twin2-1],nanmean(all_same_norm_rates))
+%plot([-twin1:twin2-1],nanmean(all_fixation_rates))
+
+plot([-twin1:twin2-1],nanmean(all_nonplace_out2in_rates))
+

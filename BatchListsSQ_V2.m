@@ -5,7 +5,7 @@
 clar
 
 task = 'ListSQ';
-set(0,'DefaultFigureVisible','OFF');
+set(0,'DefaultFigureVisible','ON');
 for monkey =2:-1:1%1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
@@ -16,7 +16,7 @@ for monkey =2:-1:1%1:2
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
         figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
         predict_rt = 155;%155.85 ms prediction 5-percentile
@@ -31,7 +31,7 @@ for monkey =2:-1:1%1:2
         predict_rt = 135;%ms prediction 5-percentile
         chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
         session_data(end) = [];%last file doesn't have strobe signal working so have no timing singnal :(
     end
@@ -39,7 +39,7 @@ for monkey =2:-1:1%1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Import and Pre-Process Recording Data---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    for session = 1:length(session_data)
+    for session = 45%1:length(session_data)
         ImportListSQRecordingDataV2(data_dir,figure_dir,session_data{session})
     end
     
@@ -64,10 +64,10 @@ for monkey =2:-1:1%1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine Place Cell Reliablity Across Fixations in Field vs out Field---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %     for session =1:length(session_data)
-    %         disp(['#' num2str(session) ' ' session_data{session}.task1_file])
-    %         Place_Cell_Fixation_Analysis(data_dir,figure_dir,session_data{session},predict_rt)
-    %     end
+%         for session =1:length(session_data)
+%             disp(['#' num2str(session) ' ' session_data{session}.task1_file])
+%             Place_Cell_Fixation_Analysis(data_dir,figure_dir,session_data{session},predict_rt)
+%         end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Modulated by Saccade Direction and/or Amplitude---%%%
@@ -146,9 +146,9 @@ for monkey =2:-1:1%1:2
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%---Determine if Neurons are Firing During ITI Period---%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        for session = 1:length(session_data)
-            Reward_analysis(data_dir,figure_dir,session_data{session})
-        end
+%         for session = 1:length(session_data)
+%             Reward_analysis(data_dir,figure_dir,session_data{session})
+%         end
 end
 emailme('Batch Done Running')
 set(0,'DefaultFigureVisible','ON');

@@ -37,6 +37,7 @@ visual_response_stats_long = []; %long 5 second window, 1 for sig, 0 for not sig
 visual_response_stats_short_sliding = []; %sliding window analysis for short 1 second window, 1 for sig, 0 for not sig
 visual_response_stats_long_sliding = []; %sliding window analysis for long 5 second window, 1 for sig, 0 for not sig
 spatialness = []; %1 for place cells, 0 for non place cells
+all_list_peak_times = [];%peak firing times for view cells
 fixation_on_cross_status = []; %1 for sig, 0 for not sig
 image_off_status = [];%1 for sig, 0 for not sig
 memory_short = [];%significant indeces within the first 1 second window
@@ -47,6 +48,7 @@ cross_fixation_firing_rates = [];%fixation on across
 image_on_firing_rates = []; %image on 1 second window
 long_image_on_firing_rates = [];%image on 5 second window
 image_off_firing_rates = []; %image off
+
 
 monkeys = {'Vivian','Tobii'};
 figure_dir = {};
@@ -112,6 +114,8 @@ for monk =2:-1:1
             load([data_dir task_file(1:8) '-ListSQ-Visual_Response_results.mat']) %visual response analysis
             load([data_dir task_file(1:8) '-ListSQ-Visual_Response_Memory_results']) %memory visual response analysis
             load([data_dir task_file(1:end-11) '-spatial_analysis_results.mat'],'spatial_info') %spatial analysis
+            load([data_dir task_file(1:8) '-Place_Cell_Analysis.mat'])
+
         else
             if num_units ~= 0
                 error('Where is this file')
@@ -134,8 +138,11 @@ for monk =2:-1:1
                 %---Unit Test Significance and Firing Rate Curves---%
                 if (spatial_info.shuffled_rate_prctile(unit) > 95) && (spatial_info.spatialstability_halves_prctile(1,unit) > 95)
                     spatialness = [spatialness 1]; %place cell
+                    all_list_peak_times = [all_list_peak_times stats_across_tasks(1,unit)];%time of peak firing rate of place cells for out-> in fixations
+
                 else
                     spatialness = [spatialness 0]; %non place cell
+                     all_list_peak_times = [all_list_peak_times NaN];
                 end
                 
                 %---for fixation on cross hair---%
@@ -291,14 +298,15 @@ end
 %% Display Summary Results
 clc
 disp([num2str(nansum(spatialness)) ' place cells'])
+disp([num2str(nansum(spatialness == 1 & isnan(all_list_peak_times))) ' place cells have no peaks'])
 disp([num2str(sum(visual_response_stats_short == 1)) ' Visual Response 1 second window'])
 disp([num2str(sum(visual_response_stats_long == 1)) ' Visual Response 5 second window'])
 disp([num2str(sum(visual_response_stats_short == 1 | visual_response_stats_long == 1)) ' Visual Response short or long'])
 disp([num2str(sum(visual_response_stats_short == 0 & visual_response_stats_long == 1)) ' Visual Response long but not short'])
 disp('-----------------------------------------------')
 disp([num2str(sum((visual_response_stats_short == 1 | visual_response_stats_long == 1) & spatialness == 1)) ' Place cells are Visual Response short or long'])
-disp([num2str(sum((visual_response_stats_short == 1) & spatialness == 1)) ' View Cells show Visual Response within 1 second'])
-disp([num2str(sum((visual_response_stats_long == 1) & spatialness == 1)) ' View Cells show Visual Response within 5 second'])
+disp([num2str(sum((visual_response_stats_short == 1) & spatialness == 1 & ~isnan(all_list_peak_times))) ' View Cells show Visual Response within 1 second'])
+disp([num2str(sum((visual_response_stats_long == 1) & spatialness == 1 & ~ isnan(all_list_peak_times))) ' View Cells show Visual Response within 5 second'])
 disp('-----------------------------------------------')
 disp([num2str(sum(memory_long == 1 | memory_short == 1)) ' Show a Significant Memory Response'])
 disp([num2str(sum((memory_long == 1 | memory_short == 1) & (spatialness == 1))) ' Place Cells Show a Significant Memory Response'])

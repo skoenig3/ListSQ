@@ -22,15 +22,16 @@ function [trialpower,trialphase,wfq,meanpower,meanphase,powervar,phasevar] = wav
 %Default values
 Fs=1000; %1000Hz
 wavdur=1;
-min_fq=4;
-% max_fq=30;
-% n_fq=27;
-min_fq=4;
-max_fq=90;
-n_fq=50;
+min_fq=3;
+max_fq=30;
+n_fq=28;
+%min_fq=4;
+%max_fq=90;
+%n_fq=50;
 
 n_cycles=[];
-logfqaxis= true;
+%logfqaxis= true;
+logfqaxis= false;
 
 %Extract user input
 extractvarargin(varargin);

@@ -47,7 +47,7 @@ for monkey =1:2
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
         figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resored Figures\';
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
         predict_rt = 156;%156 ms prediction 5-percentile
@@ -62,7 +62,7 @@ for monkey =1:2
         predict_rt = 138;%ms prediction 5-percentile
         chamber_zero = [7.5 20]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
         session_data(end) = [];%last file doesn't have strobe signal working so have no timing singnal :(
     end

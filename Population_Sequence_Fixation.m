@@ -24,36 +24,40 @@ spatialness = [];
 
 sig_count = zeros(1,3);
 
-figure_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\Population Figures\Place Cell Eye Movements\';
-for monkey = 1:2
+for monk =1:2
+    monkey = monkeys{monk};
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %---Read in Excel Sheet for Session data---%%%
     %only need to run when somethings changed or sessions have been added
-    if monkey == 1%strcmpi(monkey,'Vivian')
-        excel_dir = 'P:\eblab\PLX files\Vivian\';
+    if strcmpi(monkey,'Vivian')
+        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Vivian\';
         excel_file = [excel_dir 'Vivian_Recording_Notes-ListSQ.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted\';
+        figure_dir{1} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\PW Resorted Figures\';
         
-        listsq_read_excel(data_dir,excel_file);
+        
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Vivian.mat'])
         
         predict_rt = 156;%156 ms prediction 5-percentile
         chamber_zero = [13.5 -11]; %AP ML
         
-    elseif monkey ==2%strcmpi(monkey,'Tobii')
-        excel_dir = 'P:\eblab\PLX files\Tobii\';
+    elseif strcmpi(monkey,'Tobii')
+        excel_dir = '\\research.wanprc.org\Research\Buffalo Lab\eblab\PLX files\Tobii\';
         excel_file = [excel_dir 'Tobii_recordingnotes.xlsx']; %recording notes
         data_dir = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Recording Files\';
+        figure_dir{2} = 'C:\Users\seth.koenig\Documents\MATLAB\ListSQ\TO Figures\';
         
         predict_rt = 138;%ms prediction 5-percentile
         chamber_zero = [7.5 15]; %AP ML, his posertior hippocampus appears slightly shorter/more compressed than atlas
         
-        listsq_read_excel(data_dir,excel_file);
+        %listsq_read_excel(data_dir,excel_file);
         load([data_dir 'Across_Session_Unit_Data_Tobii.mat'])
-        session_data(end) = [];%last file doesn't have strobe signal working so have no timing singnal :(
+        session_data(end) = [];%last file doesn't have strobe signal working on importing the data
     end
     
-    for session = 1:length(session_data)
+    for sess = 1:length(session_data)
         [task_file,item_file,cnd_file,multiunit,unit_names,unit_confidence,sorting_quality,~]=...
             get_task_data(session_data{session},task);
         if isempty(task_file)
