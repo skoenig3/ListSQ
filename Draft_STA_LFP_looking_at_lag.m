@@ -434,7 +434,8 @@ subplot(2,2,1)
 hist(min_lag_dist,25)
 xlabel('Spike Time-Artifact (ms)')
 ylabel('# of Units')
-title(['Trough/Minimum Distribution, n = ' num2str(num_min)])
+title(['Trough/Minimum Distribution, n = ' num2str(num_min), ', median = ' num2str(median(min_lag_dist)) ' ms'])
+box off
 
 max_lag_dist = min_max_lag(2,:);
 max_lag_dist(isnan(max_lag_dist)) = [];
@@ -444,7 +445,8 @@ subplot(2,2,2)
 hist(max_lag_dist,25)
 xlabel('Spike Time-Artifact (ms)')
 ylabel('# of Units')
-title(['Peak/Max Distribution, n = ' num2str(num_max)])
+title(['Peak/Max Distribution, n = ' num2str(num_max) ', median = ' num2str(median(max_lag_dist)) ' ms'])
+box off
 
 win_sess_var = within_sess_variance;
 win_sess_var(isnan(win_sess_var)) = [];
